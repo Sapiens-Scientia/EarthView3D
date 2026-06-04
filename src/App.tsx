@@ -49,7 +49,7 @@ function getBrowserTimezone() {
 }
 
 export default function App() {
-  const { isDark, theme, toggleTheme } = useAppContext()
+  const { isDark } = useAppContext()
   const [mode, setMode] = useState<EarthVisualizationMode>(readStoredMode)
   const [sceneIsDark, setSceneIsDark] = useState(() => readStoredSceneDark(isDark))
   const [previewHours, setPreviewHours] = useState(0)
@@ -144,15 +144,6 @@ export default function App() {
               title={sceneIsDark ? 'Use light 3D scene' : 'Use dark 3D scene'}
             >
               {sceneIsDark ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
-            </button>
-            <button
-              type="button"
-              className="earth-theme-button"
-              onClick={toggleTheme}
-              aria-label={`Switch site theme from ${theme}`}
-              title={`Switch site theme from ${theme}`}
-            >
-              Theme
             </button>
           </div>
         </header>

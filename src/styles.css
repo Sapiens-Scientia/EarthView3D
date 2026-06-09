@@ -117,6 +117,7 @@ button {
 }
 
 .earth-icon-button,
+.earth-action-button,
 .earth-theme-button,
 .earth-mode-button {
   appearance: none;
@@ -130,6 +131,7 @@ button {
 }
 
 .earth-stage-light .earth-icon-button,
+.earth-stage-light .earth-action-button,
 .earth-stage-light .earth-theme-button,
 .earth-stage-light .earth-mode-button {
   border-color: rgba(15, 23, 42, 0.1);
@@ -144,6 +146,26 @@ button {
   align-items: center;
   justify-content: center;
   border-radius: 8px;
+}
+
+.earth-action-button {
+  height: 38px;
+  min-width: 104px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.earth-action-button svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
 }
 
 .earth-icon-button svg {
@@ -198,19 +220,28 @@ button {
   color: #ecfeff;
 }
 
+.earth-action-button.is-active,
 .earth-stage-light .earth-mode-button.is-active {
   border-color: rgba(8, 145, 178, 0.32);
   background: rgba(207, 250, 254, 0.92);
   color: #155e75;
 }
 
+.earth-stage-dark .earth-action-button.is-active {
+  border-color: rgba(34, 211, 238, 0.7);
+  background: rgba(8, 145, 178, 0.78);
+  color: #ecfeff;
+}
+
 .earth-icon-button:hover,
+.earth-action-button:hover,
 .earth-theme-button:hover,
 .earth-mode-button:hover {
   background: rgba(30, 41, 59, 0.78);
 }
 
 .earth-stage-light .earth-icon-button:hover,
+.earth-stage-light .earth-action-button:hover,
 .earth-stage-light .earth-theme-button:hover,
 .earth-stage-light .earth-mode-button:hover {
   background: rgba(241, 245, 249, 0.92);
@@ -238,6 +269,14 @@ button {
   .earth-icon-button {
     width: 36px;
     height: 36px;
+  }
+
+  .earth-action-button {
+    height: 36px;
+    min-width: 92px;
+    gap: 5px;
+    padding: 0 9px;
+    font-size: 11px;
   }
 
   .earth-theme-button {

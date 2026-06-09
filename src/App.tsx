@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Globe2, Moon, Orbit, Pause, Play, Sparkles, Sun, Waves } from 'lucide-react'
+import { Axis3d, Globe2, Moon, Orbit, Pause, Play, RotateCcw, Sparkles, Sun, Waves } from 'lucide-react'
 import { UnifiedEarthView, type EarthVisualizationMode } from './components/globe/UnifiedEarthView'
 import { useAppContext } from './contexts'
 
@@ -54,6 +54,8 @@ export default function App() {
   const [sceneIsDark, setSceneIsDark] = useState(() => readStoredSceneDark(isDark))
   const [previewHours, setPreviewHours] = useState(0)
   const [isPreviewing, setIsPreviewing] = useState(false)
+  const [orbitTiltView, setOrbitTiltView] = useState(false)
+  const [resetViewKey, setResetViewKey] = useState(0)
   const timezone = useMemo(getBrowserTimezone, [])
 
   useEffect(() => {
@@ -110,6 +112,8 @@ export default function App() {
           mode={mode}
           timeOffsetHours={mode === 'globe' ? previewHours : 0}
           isDarkOverride={sceneIsDark}
+          orbitTiltView={orbitTiltView}
+          resetViewKey={resetViewKey}
           timezone={timezone}
         />
 
@@ -120,6 +124,28 @@ export default function App() {
           </div>
 
           <div className="earth-actions">
+            <button
+              type="button"
+              className="earth-icon-button"
+              onClick={() => setResetViewKey((key) => key + 1)}
+              aria-label="Reset view"
+              title="Reset view"
+            >
+              <RotateCcw aria-hidden="true" />
+            </button>
+            {mode === 'orbit' && (
+              <button
+                type="button"
+                className={`earth-action-button ${orbitTiltView ? 'is-active' : ''}`}
+                onClick={() => setOrbitTiltView((value) => !value)}
+                aria-pressed={orbitTiltView}
+                aria-label={orbitTiltView ? 'Turn off Tilt View' : 'Turn on Tilt View'}
+                title={orbitTiltView ? 'Turn off Tilt View' : 'Turn on Tilt View'}
+              >
+                <Axis3d aria-hidden="true" />
+                <span>Tilt View</span>
+              </button>
+            )}
             {mode === 'globe' && (
               <button
                 type="button"

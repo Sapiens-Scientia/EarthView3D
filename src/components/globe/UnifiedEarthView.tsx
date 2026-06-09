@@ -4,7 +4,7 @@ import { Billboard, Line, OrbitControls, Text } from '@react-three/drei'
 import * as THREE from 'three'
 import { useAppContext } from '../../contexts'
 import type { ThemeMode } from '../../contexts'
-import { EarthNorthArrowLocalYNorth, EarthRotationRingLocalYNorth } from './EarthSpinDecor3D'
+import { EarthNorthArrowLocalYNorth } from './EarthSpinDecor3D'
 
 export type EarthVisualizationMode = 'globe' | 'orbit' | 'spiral' | 'galaxy'
 
@@ -312,10 +312,10 @@ function getCameraPosition(mode: EarthVisualizationMode, date = new Date()) {
     const julyProgress = getProgressForDate(year, 6, 1)
     if (mode === 'globe') {
         const currentProgress = getOrbitalProgress(date)
-        return cameraVectorForDirection(getHaloDirectionForProgress(currentProgress, julyProgress, year), 3.05, 0.58)
+        return cameraVectorForDirection(getHaloDirectionForProgress(currentProgress, julyProgress, year), 3.55, 0.68)
     }
-    if (mode === 'orbit') return cameraVectorForProgress(julyProgress, 4.1, 4.2)
-    if (mode === 'galaxy') return new THREE.Vector3(8.4, 12.2, 17.5)
+    if (mode === 'orbit') return cameraVectorForProgress(0.5, 6.1, 5.85)
+    if (mode === 'galaxy') return new THREE.Vector3(0, 12.2, 17.5)
     return cameraVectorForProgress(julyProgress, 8.8, 6)
 }
 
@@ -589,7 +589,6 @@ function EarthBody({
                             dashScale={8}
                             gapSize={0.03}
                         />
-                        <EarthRotationRingLocalYNorth earthRadius={1} isDark={isDark} />
                         <EarthNorthArrowLocalYNorth earthRadius={1} isDark={isDark} />
                     </>
                 )}
@@ -673,7 +672,7 @@ function Sun({ position, radius, isDark, theme }: { position: THREE.Vector3; rad
 
 function OrbitAnnotations({ isDark, theme, progress }: { isDark: boolean; theme: ThemeMode; progress: number }) {
     const year = new Date().getFullYear()
-    const { orbitPoints, colors, monthTicks, seasonTicks, arrowPoints } = useMemo(() => {
+    const { orbitPoints, colors, monthTicks, seasonTicks } = useMemo(() => {
         const pts: THREE.Vector3[] = []
         const cols: [number, number, number][] = []
         for (let i = 0; i <= 256; i++) {
@@ -687,13 +686,12 @@ function OrbitAnnotations({ isDark, theme, progress }: { isDark: boolean; theme:
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
         const monthTickData = months.map((label, index) => {
             const p = index / 12
-            const labelP = getMonthMidpointProgress(year, index)
             return {
                 label,
                 isQuarter: index % 3 === 0,
                 inner: orbitPoint(p, ORBIT_RADIUS - 0.07),
                 outer: orbitPoint(p, ORBIT_RADIUS + 0.07),
-                pos: orbitPoint(labelP, ORBIT_RADIUS + 0.42),
+                pos: orbitPoint(p, ORBIT_RADIUS + 0.42),
             }
         })
 
@@ -707,20 +705,13 @@ function OrbitAnnotations({ isDark, theme, progress }: { isDark: boolean; theme:
             }
         })
 
-        const arrowAngle = progressToAngle(progress) + 0.36
-        const tip = new THREE.Vector3(Math.cos(arrowAngle) * ORBIT_RADIUS, 0, -Math.sin(arrowAngle) * ORBIT_RADIUS)
-        const tangent = new THREE.Vector3(-Math.sin(arrowAngle), 0, -Math.cos(arrowAngle)).normalize()
-        const side = new THREE.Vector3(tangent.z, 0, -tangent.x).multiplyScalar(0.1)
-        const base = tip.clone().sub(tangent.clone().multiplyScalar(0.3))
-
         return {
             orbitPoints: pts,
             colors: cols,
             monthTicks: monthTickData,
             seasonTicks: seasonTickData,
-            arrowPoints: [base.clone().add(side), tip, base.clone().sub(side)],
         }
-    }, [isDark, progress, theme, year])
+    }, [isDark, theme, year])
 
     return (
         <group>
@@ -729,7 +720,6 @@ function OrbitAnnotations({ isDark, theme, progress }: { isDark: boolean; theme:
                 <ringGeometry args={[ORBIT_RADIUS - 0.02, ORBIT_RADIUS + 0.02, 128]} />
                 <meshBasicMaterial color={isDark ? '#1e293b' : theme === 'sepia' ? '#e2e8f0' : '#eef4fb'} transparent opacity={isDark ? 0.16 : 0.12} side={THREE.DoubleSide} />
             </mesh>
-            <Line points={arrowPoints} color={isDark ? '#94a3b8' : theme === 'sepia' ? '#64748b' : '#7893b3'} lineWidth={2} />
             {monthTicks.map((tick) => (
                 <group key={tick.label}>
                     <Line points={[tick.inner, tick.outer]} color={isDark ? '#475569' : theme === 'sepia' ? '#94a3b8' : '#cbd5e1'} lineWidth={tick.isQuarter ? 2 : 1} />
@@ -1131,6 +1121,78 @@ function GalaxyHistoryModel({ isDark, theme }: { isDark: boolean; theme: ThemeMo
                     {`Earth Age timeline\n0 EA = Earth forms\n${GALACTIC_TURNS.toPrecision(3)} past orbits + ${(FUTURE_PROJECTION_MA / GALACTIC_YEAR_MA).toPrecision(3)} projected future orbits`}
                 </Text>
             </Billboard>
+            <GalaxyTimeAxis isDark={isDark} theme={theme} />
+        </group>
+    )
+}
+
+function GalaxyTimeAxis({ isDark, theme }: { isDark: boolean; theme: ThemeMode }) {
+    const axisColor = isDark ? '#cbd5e1' : theme === 'sepia' ? '#7c6f58' : '#64748b'
+    const minorColor = isDark ? '#64748b' : theme === 'sepia' ? '#a8a29e' : '#cbd5e1'
+    const labelColor = isDark ? '#e2e8f0' : theme === 'sepia' ? '#57534e' : '#334155'
+    const outline = isDark ? '#020617' : '#ffffff'
+    const x = -3.55
+    const z = 0
+    const axisStartEaMa = 0
+    const axisEndEaMa = EARTH_AGE_MA + FUTURE_PROJECTION_MA
+    const axisStartY = galaxyPoint(EARTH_AGE_MA).y
+    const axisEndY = galaxyPoint(-FUTURE_PROJECTION_MA).y
+    const ticks = useMemo(() => {
+        const items: Array<{ eaMa: number; y: number; isMajor: boolean; isEndpoint: boolean }> = []
+        for (let eaMa = axisStartEaMa; eaMa <= axisEndEaMa + 0.001; eaMa += 100) {
+            const isEndpoint = Math.abs(eaMa - axisStartEaMa) < 0.001
+            items.push({
+                eaMa,
+                y: galaxyPoint(EARTH_AGE_MA - eaMa).y,
+                isMajor: eaMa % 1000 === 0,
+                isEndpoint,
+            })
+        }
+        return items
+    }, [axisEndEaMa])
+
+    return (
+        <group>
+            <Line
+                points={[new THREE.Vector3(x, axisStartY, z), new THREE.Vector3(x, axisEndY, z)]}
+                color={axisColor}
+                lineWidth={2.4}
+                transparent
+                opacity={isDark ? 0.86 : 0.72}
+            />
+            {ticks.map((tick) => {
+                const tickLength = tick.isMajor || tick.isEndpoint ? 0.34 : 0.16
+                return (
+                    <group key={`galaxy-time-${tick.eaMa}`}>
+                        <Line
+                            points={[new THREE.Vector3(x, tick.y, z), new THREE.Vector3(x + tickLength, tick.y, z)]}
+                            color={tick.isMajor || tick.isEndpoint ? axisColor : minorColor}
+                            lineWidth={tick.isMajor || tick.isEndpoint ? 2.4 : 1.35}
+                            transparent
+                            opacity={tick.isMajor || tick.isEndpoint ? (isDark ? 0.86 : 0.72) : (isDark ? 0.42 : 0.34)}
+                        />
+                        {(tick.isMajor || tick.isEndpoint) && (
+                            <Billboard position={new THREE.Vector3(x - 0.16, tick.y, z)}>
+                                <Text
+                                    fontSize={tick.isEndpoint ? 0.12 : 0.105}
+                                    color={labelColor}
+                                    anchorX="right"
+                                    anchorY="middle"
+                                    outlineWidth={0.0035}
+                                    outlineColor={outline}
+                                >
+                                    {formatEarthAge(tick.eaMa)}
+                                </Text>
+                            </Billboard>
+                        )}
+                    </group>
+                )
+            })}
+            <Billboard position={new THREE.Vector3(x - 0.18, axisEndY + 0.32, z)}>
+                <Text fontSize={0.12} color={labelColor} anchorX="right" anchorY="middle" lineHeight={0.9} outlineWidth={0.004} outlineColor={outline}>
+                    {`Earth Age\n(Years since formation of Earth)`}
+                </Text>
+            </Billboard>
         </group>
     )
 }
@@ -1488,7 +1550,25 @@ function GlobeSeasonHalo({ isDark, theme, timeOffsetHours, dateTextColor, timezo
     )
 }
 
-function UnifiedScene({ mode, isDark, theme, timeOffsetHours, homeCoords, timezone }: { mode: EarthVisualizationMode; isDark: boolean; theme: ThemeMode; timeOffsetHours: number; homeCoords?: EarthCoords; timezone: string }) {
+function UnifiedScene({
+    mode,
+    isDark,
+    theme,
+    timeOffsetHours,
+    homeCoords,
+    timezone,
+    orbitTiltView,
+    resetViewKey,
+}: {
+    mode: EarthVisualizationMode
+    isDark: boolean
+    theme: ThemeMode
+    timeOffsetHours: number
+    homeCoords?: EarthCoords
+    timezone: string
+    orbitTiltView: boolean
+    resetViewKey: number
+}) {
     const { camera } = useThree()
     const sceneDate = useMemo(() => new Date(Date.now() + timeOffsetHours * 3600000), [timeOffsetHours])
     const progress = getOrbitalProgress(sceneDate)
@@ -1505,13 +1585,17 @@ function UnifiedScene({ mode, isDark, theme, timeOffsetHours, homeCoords, timezo
     const sunRadius = mode === 'orbit' ? 0.28 : 0.22
     const orbitDateLabel = useMemo(() => formatSeasonHaloDate(sceneDate), [sceneDate])
     const dateTextColor = isDark ? '#fde68a' : theme === 'sepia' ? '#a16207' : '#b7791f'
+    const orbitViewQuaternion = useMemo(() => {
+        if (mode !== 'orbit' || !orbitTiltView) return new THREE.Quaternion()
+        return makeEarthTiltQuaternion(sceneDate.getFullYear()).invert()
+    }, [mode, orbitTiltView, sceneDate])
     const controlsRef = useRef<any>(null)
-    const controlsModeKey = mode
+    const controlsModeKey = `${mode}-${resetViewKey}`
     const desiredCamera = useMemo(() => getCameraPosition(mode), [mode])
     const desiredTarget = useMemo(() => {
         if (mode === 'galaxy') return new THREE.Vector3(0, (galaxyPoint(-FUTURE_PROJECTION_MA).y - GALAXY_HISTORY_HEIGHT / 2) / 2, 0)
         return new THREE.Vector3(0, 0, 0)
-    }, [controlsModeKey, mode])
+    }, [mode])
     const transitionRef = useRef({
         t: 1,
         fromCamera: desiredCamera.clone(),
@@ -1528,7 +1612,7 @@ function UnifiedScene({ mode, isDark, theme, timeOffsetHours, homeCoords, timezo
             fromTarget: controlsRef.current?.target.clone() ?? desiredTarget.clone(),
             toTarget: desiredTarget.clone(),
         }
-    }, [controlsModeKey])
+    }, [camera, controlsModeKey, desiredCamera, desiredTarget])
 
     useFrame((_, delta) => {
         const transition = transitionRef.current
@@ -1553,39 +1637,41 @@ function UnifiedScene({ mode, isDark, theme, timeOffsetHours, homeCoords, timezo
         <>
             <ambientLight intensity={mode === 'globe' ? (isDark ? 0.22 : 0.46) : (isDark ? 0.18 : 0.42)} />
             <directionalLight position={[5, 2, 5]} intensity={mode === 'globe' ? (isDark ? 0.55 : 0.78) : 0.22} color={isDark ? '#9ec4ff' : '#ffffff'} />
-            <pointLight position={sunPos.toArray()} intensity={mode === 'globe' ? 0 : isDark ? 2.5 : 2} color={isDark || theme === 'sepia' ? '#fde68a' : '#fff4c2'} distance={16} decay={1.4} />
             <Stars isDark={isDark} theme={theme} />
-            {mode === 'globe' && <GlobeSeasonHalo isDark={isDark} theme={theme} timeOffsetHours={timeOffsetHours} dateTextColor={dateTextColor} timezone={timezone} />}
-            {mode === 'orbit' && <OrbitAnnotations isDark={isDark} theme={theme} progress={progress} />}
-            {mode === 'spiral' && <SpiralAnnotations isDark={isDark} theme={theme} />}
-            {mode === 'galaxy' && <GalaxyHistoryModel isDark={isDark} theme={theme} />}
-            {mode !== 'globe' && mode !== 'galaxy' && <Sun position={sunPos} radius={sunRadius} isDark={isDark} theme={theme} />}
-            {(mode === 'orbit' || mode === 'spiral') && (
-                <Billboard position={sunPos.clone().add(new THREE.Vector3(0, sunRadius + 0.38, 0))}>
-                    <Text fontSize={0.16} color={dateTextColor} anchorX="center" anchorY="middle" outlineWidth={0.006} outlineColor={isDark ? '#0f172a' : '#ffffff'}>
-                        {orbitDateLabel}
+            <group quaternion={orbitViewQuaternion}>
+                <pointLight position={sunPos.toArray()} intensity={mode === 'globe' ? 0 : isDark ? 2.5 : 2} color={isDark || theme === 'sepia' ? '#fde68a' : '#fff4c2'} distance={16} decay={1.4} />
+                {mode === 'globe' && <GlobeSeasonHalo isDark={isDark} theme={theme} timeOffsetHours={timeOffsetHours} dateTextColor={dateTextColor} timezone={timezone} />}
+                {mode === 'orbit' && <OrbitAnnotations isDark={isDark} theme={theme} progress={progress} />}
+                {mode === 'spiral' && <SpiralAnnotations isDark={isDark} theme={theme} />}
+                {mode === 'galaxy' && <GalaxyHistoryModel isDark={isDark} theme={theme} />}
+                {mode !== 'globe' && mode !== 'galaxy' && <Sun position={sunPos} radius={sunRadius} isDark={isDark} theme={theme} />}
+                {(mode === 'orbit' || mode === 'spiral') && (
+                    <Billboard position={sunPos.clone().add(new THREE.Vector3(0, sunRadius + 0.38, 0))}>
+                        <Text fontSize={0.16} color={dateTextColor} anchorX="center" anchorY="middle" outlineWidth={0.006} outlineColor={isDark ? '#0f172a' : '#ffffff'}>
+                            {orbitDateLabel}
+                        </Text>
+                    </Billboard>
+                )}
+                {mode !== 'globe' && mode !== 'galaxy' && (
+                    <Line
+                        points={[sunPos, earthPos]}
+                        color={isDark ? '#ffffff' : '#000000'}
+                        lineWidth={1}
+                        transparent
+                        opacity={isDark ? 0.14 : 0.08}
+                        dashed
+                        dashSize={0.08}
+                        dashScale={3}
+                        gapSize={0.06}
+                    />
+                )}
+                {mode !== 'galaxy' && <EarthBody mode={mode} position={earthPos} radius={earthRadius} isDark={isDark} theme={theme} progress={progress} timeOffsetHours={timeOffsetHours} homeCoords={homeCoords} />}
+                {mode === 'spiral' && (
+                    <Text position={[earthPos.x, earthPos.y + earthRadius + 0.18, earthPos.z]} fontSize={0.11} color={isDark || theme === 'sepia' ? '#60a5fa' : '#3f8fe8'} anchorX="center" anchorY="bottom" outlineWidth={0.004} outlineColor={isDark ? '#0f172a' : '#ffffff'}>
+                        NOW
                     </Text>
-                </Billboard>
-            )}
-            {mode !== 'globe' && mode !== 'galaxy' && (
-                <Line
-                    points={[sunPos, earthPos]}
-                    color={isDark ? '#ffffff' : '#000000'}
-                    lineWidth={1}
-                    transparent
-                    opacity={isDark ? 0.14 : 0.08}
-                    dashed
-                    dashSize={0.08}
-                    dashScale={3}
-                    gapSize={0.06}
-                />
-            )}
-            {mode !== 'galaxy' && <EarthBody mode={mode} position={earthPos} radius={earthRadius} isDark={isDark} theme={theme} progress={progress} timeOffsetHours={timeOffsetHours} homeCoords={homeCoords} />}
-            {mode === 'spiral' && (
-                <Text position={[earthPos.x, earthPos.y + earthRadius + 0.18, earthPos.z]} fontSize={0.11} color={isDark || theme === 'sepia' ? '#60a5fa' : '#3f8fe8'} anchorX="center" anchorY="bottom" outlineWidth={0.004} outlineColor={isDark ? '#0f172a' : '#ffffff'}>
-                    NOW
-                </Text>
-            )}
+                )}
+            </group>
             <OrbitControls
                 key={controlsModeKey}
                 ref={controlsRef}
@@ -1619,11 +1705,13 @@ interface UnifiedEarthViewProps {
     mode: EarthVisualizationMode
     timeOffsetHours?: number
     isDarkOverride?: boolean
+    orbitTiltView?: boolean
+    resetViewKey?: number
     homeCoords?: EarthCoords
     timezone: string
 }
 
-export function UnifiedEarthView({ className, style, mode, timeOffsetHours = 0, isDarkOverride, homeCoords, timezone }: UnifiedEarthViewProps) {
+export function UnifiedEarthView({ className, style, mode, timeOffsetHours = 0, isDarkOverride, orbitTiltView = false, resetViewKey = 0, homeCoords, timezone }: UnifiedEarthViewProps) {
     const { isDark, theme } = useAppContext()
     const [ready, setReady] = useState(false)
     const [contextResetKey, setContextResetKey] = useState(0)
@@ -1660,7 +1748,7 @@ export function UnifiedEarthView({ className, style, mode, timeOffsetHours = 0, 
                 }}
             >
                 <SceneBackground color={bgColor} />
-                <UnifiedScene mode={mode} isDark={sceneIsDark} theme={theme} timeOffsetHours={timeOffsetHours} homeCoords={homeCoords} timezone={timezone} />
+                <UnifiedScene mode={mode} isDark={sceneIsDark} theme={theme} timeOffsetHours={timeOffsetHours} homeCoords={homeCoords} timezone={timezone} orbitTiltView={orbitTiltView} resetViewKey={resetViewKey} />
             </Canvas>
         </div>
     )

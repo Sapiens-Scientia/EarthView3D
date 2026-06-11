@@ -1052,7 +1052,7 @@ function GalaxyHistoryModel({ isDark, theme }: { isDark: boolean; theme: ThemeMo
             {orbitGhosts.map((ring, index) => (
                 <Line key={`galactic-ring-${index}`} points={ring} color={isDark ? '#334155' : '#cbd5e1'} lineWidth={0.55} transparent opacity={isDark ? 0.16 : 0.2} />
             ))}
-            <Line points={decorativeEarthOrbit} color={isDark ? '#93c5fd' : '#2563eb'} lineWidth={1.1} transparent opacity={isDark ? 0.45 : 0.3} />
+            <Line points={decorativeEarthOrbit} color={isDark ? '#94a3b8' : '#64748b'} lineWidth={1.1} transparent opacity={0.3} />
             <Line points={pathData.points} vertexColors={pathData.colors} lineWidth={3.3} />
             <Line points={futurePath} color={isDark ? '#fbbf24' : '#d97706'} lineWidth={2.1} transparent opacity={0.5} dashed dashSize={0.14} dashScale={4} gapSize={0.08} />
             {GEO_BOUNDARIES.map((boundary) => {

@@ -103,15 +103,16 @@ export default function App() {
   }, [mode])
 
   const activeMode = MODES.find((item) => item.id === mode) ?? MODES[3]
+  const effectiveSceneIsDark = mode === 'galaxy' || sceneIsDark
 
   return (
     <main className="earth-shell">
-      <section className={`earth-stage ${sceneIsDark ? 'earth-stage-dark' : 'earth-stage-light'}`} aria-label={`${activeMode.label} visualization`}>
+      <section className={`earth-stage ${effectiveSceneIsDark ? 'earth-stage-dark' : 'earth-stage-light'}`} aria-label={`${activeMode.label} visualization`}>
         <UnifiedEarthView
           className="earth-canvas"
           mode={mode}
           timeOffsetHours={mode === 'globe' ? previewHours : 0}
-          isDarkOverride={sceneIsDark}
+          isDarkOverride={effectiveSceneIsDark}
           orbitTiltView={orbitTiltView}
           resetViewKey={resetViewKey}
           timezone={timezone}
@@ -161,16 +162,18 @@ export default function App() {
                 {isPreviewing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
               </button>
             )}
-            <button
-              type="button"
-              className="earth-icon-button"
-              onClick={() => setSceneIsDark((value) => !value)}
-              aria-pressed={sceneIsDark}
-              aria-label={sceneIsDark ? 'Use light 3D scene' : 'Use dark 3D scene'}
-              title={sceneIsDark ? 'Use light 3D scene' : 'Use dark 3D scene'}
-            >
-              {sceneIsDark ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
-            </button>
+            {mode !== 'galaxy' && (
+              <button
+                type="button"
+                className="earth-icon-button"
+                onClick={() => setSceneIsDark((value) => !value)}
+                aria-pressed={sceneIsDark}
+                aria-label={sceneIsDark ? 'Use light 3D scene' : 'Use dark 3D scene'}
+                title={sceneIsDark ? 'Use light 3D scene' : 'Use dark 3D scene'}
+              >
+                {sceneIsDark ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+              </button>
+            )}
           </div>
         </header>
 

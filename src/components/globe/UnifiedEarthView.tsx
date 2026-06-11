@@ -28,6 +28,11 @@ const GALACTIC_YEAR_MA = GALACTIC_YEAR_SOLAR_YEARS / 1_000_000
 const GALACTIC_TURNS = EARTH_AGE_MA / GALACTIC_YEAR_MA
 const GALAXY_ORBIT_RADIUS = 1.95
 const GALAXY_HISTORY_HEIGHT = 8.2
+const GALAXY_DISK_SIZE = 7
+const GALAXY_TEXTURE_ZOOM = 0.68
+const GALAXY_EARTH_ORBIT_DECORATIVE_TURNS = 2080
+const GALAXY_EARTH_ORBIT_DECORATIVE_POINTS = 41600
+const GALAXY_EARTH_ORBIT_DECORATIVE_RADIUS = 0.0725
 const FUTURE_PROJECTION_MA = 2_000
 const ECLIPTIC_TO_GALACTIC_RAD = (60.2 * Math.PI) / 180
 const GALAXY_LABEL_RADIAL_SPREAD = 1.18
@@ -873,13 +878,15 @@ function GalaxyDisk({ position, isDark }: { position: THREE.Vector3; isDark: boo
     useMemo(() => {
         texture.colorSpace = THREE.SRGBColorSpace
         texture.anisotropy = 8
+        texture.repeat.set(GALAXY_TEXTURE_ZOOM, GALAXY_TEXTURE_ZOOM)
+        texture.offset.set((1 - GALAXY_TEXTURE_ZOOM) / 2, (1 - GALAXY_TEXTURE_ZOOM) / 2)
         texture.needsUpdate = true
     }, [texture])
 
     return (
         <group position={position}>
             <mesh rotation={[-Math.PI / 2, 0, 0]}>
-                <planeGeometry args={[6.2, 6.2]} />
+                <planeGeometry args={[GALAXY_DISK_SIZE, GALAXY_DISK_SIZE]} />
                 <meshBasicMaterial map={texture} depthWrite={false} side={THREE.DoubleSide} transparent opacity={isDark ? 0.92 : 0.82} />
             </mesh>
         </group>
@@ -903,7 +910,7 @@ function SolarSystemGlyph({
     const basis = useMemo(() => {
         const u = centerDirection.clone().setY(0).normalize()
         const flatV = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), u).normalize()
-        const v = flatV.clone().applyAxisAngle(u, ECLIPTIC_TO_GALACTIC_RAD).normalize()
+        const v = flatV.clone().applyAxisAngle(u, -ECLIPTIC_TO_GALACTIC_RAD).normalize()
         return { u, v }
     }, [centerDirection.x, centerDirection.y, centerDirection.z])
     const ring = (radius: number) => {
@@ -955,6 +962,21 @@ function SolarSystemGlyph({
 
 function GalaxyHistoryModel({ isDark, theme }: { isDark: boolean; theme: ThemeMode }) {
     const outline = isDark ? '#020617' : '#ffffff'
+    const decorativeEarthOrbit = useMemo(() => {
+        const points: THREE.Vector3[] = []
+        for (let i = 0; i <= GALAXY_EARTH_ORBIT_DECORATIVE_POINTS; i++) {
+            const t = i / GALAXY_EARTH_ORBIT_DECORATIVE_POINTS
+            const ageMa = EARTH_AGE_MA * (1 - t)
+            const center = galaxyPoint(ageMa)
+            const radial = center.clone().setY(0).normalize()
+            const vertical = new THREE.Vector3(0, 1, 0)
+            const phase = t * GALAXY_EARTH_ORBIT_DECORATIVE_TURNS * Math.PI * 2
+            points.push(center.clone()
+                .add(radial.multiplyScalar(Math.cos(phase) * GALAXY_EARTH_ORBIT_DECORATIVE_RADIUS))
+                .add(vertical.multiplyScalar(Math.sin(phase) * GALAXY_EARTH_ORBIT_DECORATIVE_RADIUS)))
+        }
+        return points
+    }, [])
     const pathData = useMemo(() => {
         const points: THREE.Vector3[] = []
         const colors: [number, number, number][] = []
@@ -1030,6 +1052,7 @@ function GalaxyHistoryModel({ isDark, theme }: { isDark: boolean; theme: ThemeMo
             {orbitGhosts.map((ring, index) => (
                 <Line key={`galactic-ring-${index}`} points={ring} color={isDark ? '#334155' : '#cbd5e1'} lineWidth={0.55} transparent opacity={isDark ? 0.16 : 0.2} />
             ))}
+            <Line points={decorativeEarthOrbit} color={isDark ? '#93c5fd' : '#2563eb'} lineWidth={1.1} transparent opacity={isDark ? 0.45 : 0.3} />
             <Line points={pathData.points} vertexColors={pathData.colors} lineWidth={3.3} />
             <Line points={futurePath} color={isDark ? '#fbbf24' : '#d97706'} lineWidth={2.1} transparent opacity={0.5} dashed dashSize={0.14} dashScale={4} gapSize={0.08} />
             {GEO_BOUNDARIES.map((boundary) => {
@@ -1116,18 +1139,13 @@ function GalaxyHistoryModel({ isDark, theme }: { isDark: boolean; theme: ThemeMo
                     {`Solar System now\n${formatEarthAge(EARTH_AGE_MA)}`}
                 </Text>
             </Billboard>
-            <Billboard position={new THREE.Vector3(0, futureEndPoint.y + 0.84, 0)}>
-                <Text fontSize={0.14} color={isDark ? '#e9d5ff' : '#6d28d9'} anchorX="center" anchorY="middle" lineHeight={0.88} outlineWidth={0.005} outlineColor={outline}>
-                    {`Earth Age timeline\n0 EA = Earth forms\n${GALACTIC_TURNS.toPrecision(3)} past orbits + ${(FUTURE_PROJECTION_MA / GALACTIC_YEAR_MA).toPrecision(3)} projected future orbits`}
-                </Text>
-            </Billboard>
             <GalaxyTimeAxis isDark={isDark} theme={theme} />
         </group>
     )
 }
 
 function GalaxyTimeAxis({ isDark, theme }: { isDark: boolean; theme: ThemeMode }) {
-    const axisColor = isDark ? '#cbd5e1' : theme === 'sepia' ? '#7c6f58' : '#64748b'
+    const axisColor = '#ffffff'
     const minorColor = isDark ? '#64748b' : theme === 'sepia' ? '#a8a29e' : '#cbd5e1'
     const labelColor = isDark ? '#e2e8f0' : theme === 'sepia' ? '#57534e' : '#334155'
     const outline = isDark ? '#020617' : '#ffffff'
@@ -1137,6 +1155,10 @@ function GalaxyTimeAxis({ isDark, theme }: { isDark: boolean; theme: ThemeMode }
     const axisEndEaMa = EARTH_AGE_MA + FUTURE_PROJECTION_MA
     const axisStartY = galaxyPoint(EARTH_AGE_MA).y
     const axisEndY = galaxyPoint(-FUTURE_PROJECTION_MA).y
+    const majorTickLength = 0.24
+    const minorTickLength = 0.1
+    const majorAxisLineWidth = 3.0
+    const minorAxisLineWidth = 3.0
     const ticks = useMemo(() => {
         const items: Array<{ eaMa: number; y: number; isMajor: boolean; isEndpoint: boolean }> = []
         for (let eaMa = axisStartEaMa; eaMa <= axisEndEaMa + 0.001; eaMa += 100) {
@@ -1150,26 +1172,25 @@ function GalaxyTimeAxis({ isDark, theme }: { isDark: boolean; theme: ThemeMode }
         }
         return items
     }, [axisEndEaMa])
-
     return (
         <group>
             <Line
                 points={[new THREE.Vector3(x, axisStartY, z), new THREE.Vector3(x, axisEndY, z)]}
                 color={axisColor}
-                lineWidth={2.4}
+                lineWidth={majorAxisLineWidth}
                 transparent
-                opacity={isDark ? 0.86 : 0.72}
+                opacity={1}
             />
             {ticks.map((tick) => {
-                const tickLength = tick.isMajor || tick.isEndpoint ? 0.34 : 0.16
+                const tickLength = tick.isMajor || tick.isEndpoint ? majorTickLength : minorTickLength
                 return (
                     <group key={`galaxy-time-${tick.eaMa}`}>
                         <Line
                             points={[new THREE.Vector3(x, tick.y, z), new THREE.Vector3(x + tickLength, tick.y, z)]}
-                            color={tick.isMajor || tick.isEndpoint ? axisColor : minorColor}
-                            lineWidth={tick.isMajor || tick.isEndpoint ? 2.4 : 1.35}
+                            color={tick.isMajor || tick.isEndpoint ? axisColor : '#ffffff'}
+                            lineWidth={tick.isMajor || tick.isEndpoint ? majorAxisLineWidth : minorAxisLineWidth}
                             transparent
-                            opacity={tick.isMajor || tick.isEndpoint ? (isDark ? 0.86 : 0.72) : (isDark ? 0.42 : 0.34)}
+                            opacity={1}
                         />
                         {(tick.isMajor || tick.isEndpoint) && (
                             <Billboard position={new THREE.Vector3(x - 0.16, tick.y, z)}>

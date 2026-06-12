@@ -178,10 +178,8 @@ function formatSolarYearCount(years: number): string {
 }
 
 function formatEarthAge(earthAgeMa: number): string {
-    if (Math.abs(earthAgeMa) < 0.0005) return '0 EA'
-    if (earthAgeMa >= 1000) return `${Number((earthAgeMa / 1000).toPrecision(3))} Ga EA`
-    if (earthAgeMa >= 1) return `${Number(earthAgeMa.toPrecision(3))} Ma EA`
-    return `${Number((earthAgeMa * 1000).toPrecision(3))} Ka EA`
+    if (Math.abs(earthAgeMa) < 0.0005) return '0 Ma EA'
+    return `${Number(earthAgeMa.toPrecision(3))} Ma EA`
 }
 
 function ageMaToEarthAge(ageMa: number): number {
@@ -1183,6 +1181,11 @@ function GalaxyTimeAxis({
     const minorTickLength = 0.1
     const majorAxisLineWidth = 3.0
     const minorAxisLineWidth = 3.0
+    const solarSystemNowKey = 'axis-solar-system-now'
+    const solarSystemNowColor = isDark ? '#fde68a' : '#a16207'
+    const solarSystemNowY = galaxyPoint(0).y
+    const solarSystemNowLabelY = solarSystemNowY + 0.24
+    const isSolarSystemNowHovered = hoveredEventKey === solarSystemNowKey
     const eonEraMarkers = useMemo(
         () => GEO_SCALE_LABELS
             .filter((item) => item.level === 'eon' || item.level === 'era')
@@ -1253,16 +1256,24 @@ function GalaxyTimeAxis({
                 const markerZ = isEon ? z + 0.025 : z + 0.05
                 const labelX = x + 0.9
                 const markerEndY = isEon ? item.y : item.labelY
+                const hasKink = !isEon && Math.abs(item.labelY - item.y) > 0.001
+                const markerPoints = hasKink
+                    ? [
+                        new THREE.Vector3(x, item.y, markerZ),
+                        new THREE.Vector3(x + markLength * 0.55, markerEndY, markerZ),
+                        new THREE.Vector3(x + markLength, markerEndY, markerZ),
+                    ]
+                    : [new THREE.Vector3(x, item.y, markerZ), new THREE.Vector3(x + markLength, markerEndY, markerZ)]
                 return (
                     <group key={`axis-${item.eventKey}`}>
                         <Line
-                            points={[new THREE.Vector3(x - 0.03, item.y, markerZ), new THREE.Vector3(x + markLength, markerEndY, markerZ)]}
+                            points={markerPoints}
                             color={item.color}
                             lineWidth={markWidth}
                             transparent
                             opacity={isHovered ? 1 : isEon ? 0.95 : 0.82}
                         />
-                        <mesh position={new THREE.Vector3(x - 0.03, item.y, markerZ)}>
+                        <mesh position={new THREE.Vector3(x, item.y, markerZ)}>
                             <sphereGeometry args={[markerRadius, 16, 16]} />
                             <meshBasicMaterial color={item.color} transparent opacity={isHovered ? 1 : 0.94} />
                         </mesh>
@@ -1287,6 +1298,41 @@ function GalaxyTimeAxis({
                     </group>
                 )
             })}
+            <group>
+                <Line
+                    points={[
+                        new THREE.Vector3(x, solarSystemNowY, z + 0.075),
+                        new THREE.Vector3(x + 0.4, solarSystemNowLabelY, z + 0.075),
+                        new THREE.Vector3(x + 0.72, solarSystemNowLabelY, z + 0.075),
+                    ]}
+                    color={solarSystemNowColor}
+                    lineWidth={isSolarSystemNowHovered ? 4.4 : 3.0}
+                    transparent
+                    opacity={isSolarSystemNowHovered ? 1 : 0.96}
+                />
+                <mesh position={new THREE.Vector3(x, solarSystemNowY, z + 0.075)}>
+                    <sphereGeometry args={[isSolarSystemNowHovered ? 0.046 : 0.033, 16, 16]} />
+                    <meshBasicMaterial color={solarSystemNowColor} transparent opacity={isSolarSystemNowHovered ? 1 : 0.96} />
+                </mesh>
+                <group position={new THREE.Vector3(x + 0.9, solarSystemNowLabelY, z)} scale={isSolarSystemNowHovered ? 1.08 : 1}>
+                    <Text
+                        fontSize={0.092}
+                        color={isSolarSystemNowHovered ? '#ffffff' : solarSystemNowColor}
+                        anchorX="left"
+                        anchorY="middle"
+                        lineHeight={0.88}
+                        outlineWidth={isSolarSystemNowHovered ? 0.008 : 0.005}
+                        outlineColor={isSolarSystemNowHovered ? solarSystemNowColor : outline}
+                        onPointerOver={(event) => {
+                            event.stopPropagation()
+                            setHoveredEventKey(solarSystemNowKey)
+                        }}
+                        onPointerOut={() => setHoveredEventKey(null)}
+                    >
+                        {`Solar System now\n${formatEarthAge(EARTH_AGE_MA)}`}
+                    </Text>
+                </group>
+            </group>
             <Text
                 position={new THREE.Vector3(x - 0.18, axisEndY + 0.32, z)}
                 fontSize={0.12}

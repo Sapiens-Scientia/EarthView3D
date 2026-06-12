@@ -59,10 +59,10 @@ const GEO_SCALE_LABELS = [
     { label: 'Archean Eon', ageMa: 4000, level: 'eon', color: '#facc15', summary: 'First stable crust' },
     { label: 'Proterozoic Eon', ageMa: 2500, level: 'eon', color: '#8b5cf6', summary: 'Oxygen and cells' },
     { label: 'Phanerozoic Eon', ageMa: 538.8, level: 'eon', color: '#16a34a', summary: 'Visible animal life' },
-    { label: 'Eoarchean Era', ageMa: 4000, level: 'era', color: '#fb7185', summary: 'Oceans and crust' },
-    { label: 'Paleoarchean Era', ageMa: 3600, level: 'era', color: '#fb7185', summary: 'Early microbes' },
-    { label: 'Mesoarchean Era', ageMa: 3200, level: 'era', color: '#fb7185', summary: 'Early continents' },
-    { label: 'Neoarchean Era', ageMa: 2800, level: 'era', color: '#fb7185', summary: 'Oxygen begins rising' },
+    { label: 'Eoarchean Era', ageMa: 4000, level: 'era', color: '#facc15', summary: 'Oceans and crust' },
+    { label: 'Paleoarchean Era', ageMa: 3600, level: 'era', color: '#facc15', summary: 'Early microbes' },
+    { label: 'Mesoarchean Era', ageMa: 3200, level: 'era', color: '#facc15', summary: 'Early continents' },
+    { label: 'Neoarchean Era', ageMa: 2800, level: 'era', color: '#facc15', summary: 'Oxygen begins rising' },
     { label: 'Paleoproterozoic Era', ageMa: 2500, level: 'era', color: '#a78bfa', summary: 'Great oxidation' },
     { label: 'Mesoproterozoic Era', ageMa: 1600, level: 'era', color: '#a78bfa', summary: 'Supercontinents' },
     { label: 'Neoproterozoic Era', ageMa: 1000, level: 'era', color: '#a78bfa', summary: 'Snowball Earth' },
@@ -88,10 +88,6 @@ const GEO_SCALE_LABELS = [
     { label: 'Pliocene Epoch', ageMa: 5.333, level: 'epoch', color: '#bbf7d0', summary: 'Early hominins' },
     { label: 'Pleistocene Epoch', ageMa: 2.58, level: 'epoch', color: '#bbf7d0', summary: 'Glacial cycles' },
     { label: 'Holocene Epoch', ageMa: 0.0117, level: 'epoch', color: '#bbf7d0', summary: 'Human civilizations' },
-] as const
-
-const GEO_BOUNDARIES = [
-    { label: 'Earth forms', ageMa: 4540, color: '#f97316' },
 ] as const
 
 const FUTURE_EARTH_EVENTS = [
@@ -962,6 +958,7 @@ function SolarSystemGlyph({
 
 function GalaxyHistoryModel({ isDark, theme }: { isDark: boolean; theme: ThemeMode }) {
     const outline = isDark ? '#020617' : '#ffffff'
+    const [hoveredEventKey, setHoveredEventKey] = useState<string | null>(null)
     const decorativeEarthOrbit = useMemo(() => {
         const points: THREE.Vector3[] = []
         for (let i = 0; i <= GALAXY_EARTH_ORBIT_DECORATIVE_POINTS; i++) {
@@ -1033,7 +1030,6 @@ function GalaxyHistoryModel({ isDark, theme }: { isDark: boolean; theme: ThemeMo
     const presentPoint = galaxyPoint(0)
     const presentCenterDirection = presentPoint.clone().multiplyScalar(-1).setY(0).normalize()
     const presentMotionDirection = galaxyMotionDirection(0)
-    const earthFormedPoint = galaxyPoint(EARTH_AGE_MA)
     const futureEndPoint = galaxyPoint(-FUTURE_PROJECTION_MA)
     return (
         <group>
@@ -1055,101 +1051,129 @@ function GalaxyHistoryModel({ isDark, theme }: { isDark: boolean; theme: ThemeMo
             <Line points={decorativeEarthOrbit} color={isDark ? '#94a3b8' : '#64748b'} lineWidth={1.1} transparent opacity={0.3} />
             <Line points={pathData.points} vertexColors={pathData.colors} lineWidth={3.3} />
             <Line points={futurePath} color={isDark ? '#fbbf24' : '#d97706'} lineWidth={2.1} transparent opacity={0.5} dashed dashSize={0.14} dashScale={4} gapSize={0.08} />
-            {GEO_BOUNDARIES.map((boundary) => {
-                return (
-                    <group key={boundary.label}>
-                        <Billboard position={galaxyLabelOffset(boundary.ageMa, 0.46)}>
-                            <Text fontSize={0.064} color={boundary.color} anchorX="center" anchorY="middle" outlineWidth={0.003} outlineColor={outline}>
-                                {boundary.label}
-                            </Text>
-                        </Billboard>
-                    </group>
-                )
-            })}
             {GEO_SCALE_LABELS.map((item) => {
                 const tick = eventTick(item.level)
+                const eventKey = `${item.level}-${item.label}`
+                const isHovered = hoveredEventKey === eventKey
+                const showConnector = item.level === 'period' || item.level === 'epoch'
                 return (
-                    <group key={`start-tick-${item.level}-${item.label}`}>
-                        <Line
-                            points={[
-                                galaxyRadialOffset(item.ageMa, tick.inner),
-                                galaxyRadialOffset(item.ageMa, tick.outer),
-                            ]}
-                            color={item.color}
-                            lineWidth={tick.width}
-                            transparent
-                            opacity={tick.opacity}
-                        />
+                    <group key={`start-tick-${eventKey}`}>
+                        {showConnector && (
+                            <Line
+                                points={[
+                                    galaxyRadialOffset(item.ageMa, tick.inner),
+                                    galaxyRadialOffset(item.ageMa, isHovered ? tick.outer + 0.09 : tick.outer),
+                                ]}
+                                color={item.color}
+                                lineWidth={isHovered ? tick.width + 1.15 : tick.width}
+                                transparent
+                                opacity={isHovered ? 1 : tick.opacity}
+                            />
+                        )}
                         <mesh position={galaxyPoint(item.ageMa)}>
-                            <sphereGeometry args={[tick.radius, 12, 12]} />
-                            <meshBasicMaterial color={item.color} transparent opacity={tick.opacity} />
+                            <sphereGeometry args={[isHovered ? tick.radius * 1.75 : tick.radius, 16, 16]} />
+                            <meshBasicMaterial color={item.color} transparent opacity={isHovered ? 1 : tick.opacity} />
                         </mesh>
                     </group>
                 )
             })}
-            {GEO_SCALE_LABELS.map((item) => (
-                <Billboard key={`${item.level}-${item.label}`} position={galaxyLabelOffset(item.ageMa, labelOffset(item.level))}>
-                    <Text
-                        fontSize={labelFont(item.level)}
-                        color={item.color}
-                        anchorX="center"
-                        anchorY="middle"
-                        lineHeight={0.86}
-                        outlineWidth={item.level === 'eon' ? 0.006 : 0.0035}
-                        outlineColor={outline}
+            {GEO_SCALE_LABELS.filter((item) => item.level === 'period' || item.level === 'epoch').map((item) => {
+                const eventKey = `${item.level}-${item.label}`
+                const isHovered = hoveredEventKey === eventKey
+                return (
+                    <Billboard
+                        key={eventKey}
+                        position={galaxyLabelOffset(item.ageMa, labelOffset(item.level))}
+                        scale={isHovered ? 1.12 : 1}
                     >
-                        {`${item.label}\n${formatEarthAge(ageMaToEarthAge(item.ageMa))}\n${item.summary}`}
-                    </Text>
-                </Billboard>
-            ))}
+                        <Text
+                            fontSize={labelFont(item.level)}
+                            color={isHovered ? '#ffffff' : item.color}
+                            anchorX="center"
+                            anchorY="middle"
+                            lineHeight={0.86}
+                            outlineWidth={isHovered ? 0.01 : 0.0035}
+                            outlineColor={isHovered ? item.color : outline}
+                            onPointerOver={(event) => {
+                                event.stopPropagation()
+                                setHoveredEventKey(eventKey)
+                            }}
+                            onPointerOut={() => setHoveredEventKey(null)}
+                        >
+                            {`${item.label}\n${formatEarthAge(ageMaToEarthAge(item.ageMa))}\n${item.summary}`}
+                        </Text>
+                    </Billboard>
+                )
+            })}
             {FUTURE_EARTH_EVENTS.map((item) => {
                 const ageMa = -item.yearsFromNowMa
                 const point = galaxyPoint(ageMa)
+                const eventKey = `future-${item.label}`
+                const isHovered = hoveredEventKey === eventKey
                 return (
-                    <group key={`future-${item.label}`}>
+                    <group key={eventKey}>
                         <Line
                             points={[
                                 galaxyRadialOffset(ageMa, -0.07),
-                                galaxyRadialOffset(ageMa, 0.42),
+                                galaxyRadialOffset(ageMa, isHovered ? 0.52 : 0.42),
                             ]}
                             color={item.color}
-                            lineWidth={1.35}
+                            lineWidth={isHovered ? 2.5 : 1.35}
                             transparent
-                            opacity={0.88}
+                            opacity={isHovered ? 1 : 0.88}
                         />
                         <mesh position={point}>
-                            <sphereGeometry args={[0.027, 12, 12]} />
-                            <meshBasicMaterial color={item.color} transparent opacity={0.92} />
+                            <sphereGeometry args={[isHovered ? 0.047 : 0.027, 16, 16]} />
+                            <meshBasicMaterial color={item.color} transparent opacity={isHovered ? 1 : 0.92} />
                         </mesh>
-                        <Billboard position={galaxyLabelOffset(ageMa, 0.86)}>
-                            <Text fontSize={0.072} color={item.color} anchorX="center" anchorY="middle" lineHeight={0.86} outlineWidth={0.0035} outlineColor={outline}>
+                        <Billboard position={galaxyLabelOffset(ageMa, 0.86)} scale={isHovered ? 1.12 : 1}>
+                            <Text
+                                fontSize={0.072}
+                                color={isHovered ? '#ffffff' : item.color}
+                                anchorX="center"
+                                anchorY="middle"
+                                lineHeight={0.86}
+                                outlineWidth={isHovered ? 0.01 : 0.0035}
+                                outlineColor={isHovered ? item.color : outline}
+                                onPointerOver={(event) => {
+                                    event.stopPropagation()
+                                    setHoveredEventKey(eventKey)
+                                }}
+                                onPointerOut={() => setHoveredEventKey(null)}
+                            >
                                 {`${item.label}\n${formatEarthAge(EARTH_AGE_MA + item.yearsFromNowMa)}\n${item.summary}`}
                             </Text>
                         </Billboard>
                     </group>
                 )
             })}
-            <mesh position={earthFormedPoint}>
-                <sphereGeometry args={[0.075, 16, 16]} />
-                <meshBasicMaterial color="#f97316" transparent opacity={0.98} />
-            </mesh>
             <SolarSystemGlyph position={presentPoint} centerDirection={presentCenterDirection} motionDirection={presentMotionDirection} isDark={isDark} />
             <Billboard position={presentPoint.clone().add(new THREE.Vector3(0, 0.32, 0))}>
                 <Text fontSize={0.12} color={isDark ? '#fde68a' : '#a16207'} anchorX="center" anchorY="middle" outlineWidth={0.005} outlineColor={outline}>
                     {`Solar System now\n${formatEarthAge(EARTH_AGE_MA)}`}
                 </Text>
             </Billboard>
-            <GalaxyTimeAxis isDark={isDark} theme={theme} />
+            <GalaxyTimeAxis isDark={isDark} theme={theme} hoveredEventKey={hoveredEventKey} setHoveredEventKey={setHoveredEventKey} />
         </group>
     )
 }
 
-function GalaxyTimeAxis({ isDark, theme }: { isDark: boolean; theme: ThemeMode }) {
+function GalaxyTimeAxis({
+    isDark,
+    theme,
+    hoveredEventKey,
+    setHoveredEventKey,
+}: {
+    isDark: boolean
+    theme: ThemeMode
+    hoveredEventKey: string | null
+    setHoveredEventKey: React.Dispatch<React.SetStateAction<string | null>>
+}) {
     const axisColor = '#ffffff'
     const minorColor = isDark ? '#64748b' : theme === 'sepia' ? '#a8a29e' : '#cbd5e1'
     const labelColor = isDark ? '#e2e8f0' : theme === 'sepia' ? '#57534e' : '#334155'
     const outline = isDark ? '#020617' : '#ffffff'
-    const x = -3.55
+    const x = -4.35
     const z = 0
     const axisStartEaMa = 0
     const axisEndEaMa = EARTH_AGE_MA + FUTURE_PROJECTION_MA
@@ -1159,6 +1183,18 @@ function GalaxyTimeAxis({ isDark, theme }: { isDark: boolean; theme: ThemeMode }
     const minorTickLength = 0.1
     const majorAxisLineWidth = 3.0
     const minorAxisLineWidth = 3.0
+    const eonEraMarkers = useMemo(
+        () => GEO_SCALE_LABELS
+            .filter((item) => item.level === 'eon' || item.level === 'era')
+            .map((item) => ({
+                ...item,
+                eventKey: `${item.level}-${item.label}`,
+                y: galaxyPoint(item.ageMa).y,
+                labelY: galaxyPoint(item.ageMa).y + (item.level === 'era' && GEO_SCALE_LABELS.some((other) => other.level === 'eon' && other.ageMa === item.ageMa) ? 0.24 : 0),
+                earthAge: ageMaToEarthAge(item.ageMa),
+            })),
+        [],
+    )
     const ticks = useMemo(() => {
         const items: Array<{ eaMa: number; y: number; isMajor: boolean; isEndpoint: boolean }> = []
         for (let eaMa = axisStartEaMa; eaMa <= axisEndEaMa + 0.001; eaMa += 100) {
@@ -1193,27 +1229,76 @@ function GalaxyTimeAxis({ isDark, theme }: { isDark: boolean; theme: ThemeMode }
                             opacity={1}
                         />
                         {(tick.isMajor || tick.isEndpoint) && (
-                            <Billboard position={new THREE.Vector3(x - 0.16, tick.y, z)}>
-                                <Text
-                                    fontSize={tick.isEndpoint ? 0.12 : 0.105}
-                                    color={labelColor}
-                                    anchorX="right"
-                                    anchorY="middle"
-                                    outlineWidth={0.0035}
-                                    outlineColor={outline}
-                                >
-                                    {formatEarthAge(tick.eaMa)}
-                                </Text>
-                            </Billboard>
+                            <Text
+                                position={new THREE.Vector3(x - 0.16, tick.y, z)}
+                                fontSize={tick.isEndpoint ? 0.12 : 0.105}
+                                color={labelColor}
+                                anchorX="right"
+                                anchorY="middle"
+                                outlineWidth={0.0035}
+                                outlineColor={outline}
+                            >
+                                {formatEarthAge(tick.eaMa)}
+                            </Text>
                         )}
                     </group>
                 )
             })}
-            <Billboard position={new THREE.Vector3(x - 0.18, axisEndY + 0.32, z)}>
-                <Text fontSize={0.12} color={labelColor} anchorX="right" anchorY="middle" lineHeight={0.9} outlineWidth={0.004} outlineColor={outline}>
-                    {`Earth Age\n(Years since formation of Earth)`}
-                </Text>
-            </Billboard>
+            {eonEraMarkers.map((item) => {
+                const isHovered = hoveredEventKey === item.eventKey
+                const isEon = item.level === 'eon'
+                const markLength = isEon ? 0.62 : 0.48
+                const markWidth = isHovered ? (isEon ? 4.7 : 3.6) : (isEon ? 3.2 : 2.4)
+                const markerRadius = isHovered ? (isEon ? 0.045 : 0.034) : (isEon ? 0.032 : 0.023)
+                const markerZ = isEon ? z + 0.025 : z + 0.05
+                const labelX = x + 0.9
+                const markerEndY = isEon ? item.y : item.labelY
+                return (
+                    <group key={`axis-${item.eventKey}`}>
+                        <Line
+                            points={[new THREE.Vector3(x - 0.03, item.y, markerZ), new THREE.Vector3(x + markLength, markerEndY, markerZ)]}
+                            color={item.color}
+                            lineWidth={markWidth}
+                            transparent
+                            opacity={isHovered ? 1 : isEon ? 0.95 : 0.82}
+                        />
+                        <mesh position={new THREE.Vector3(x - 0.03, item.y, markerZ)}>
+                            <sphereGeometry args={[markerRadius, 16, 16]} />
+                            <meshBasicMaterial color={item.color} transparent opacity={isHovered ? 1 : 0.94} />
+                        </mesh>
+                        <group position={new THREE.Vector3(labelX, item.labelY, z)} scale={isHovered ? 1.08 : 1}>
+                            <Text
+                                fontSize={isEon ? 0.096 : 0.068}
+                                color={isHovered ? '#ffffff' : item.color}
+                                anchorX="left"
+                                anchorY="middle"
+                                lineHeight={0.88}
+                                outlineWidth={isHovered ? 0.008 : isEon ? 0.005 : 0.0035}
+                                outlineColor={isHovered ? item.color : outline}
+                                onPointerOver={(event) => {
+                                    event.stopPropagation()
+                                    setHoveredEventKey(item.eventKey)
+                                }}
+                                onPointerOut={() => setHoveredEventKey(null)}
+                            >
+                                {`${item.label}\n${formatEarthAge(item.earthAge)}\n${item.summary}`}
+                            </Text>
+                        </group>
+                    </group>
+                )
+            })}
+            <Text
+                position={new THREE.Vector3(x - 0.18, axisEndY + 0.32, z)}
+                fontSize={0.12}
+                color={labelColor}
+                anchorX="right"
+                anchorY="middle"
+                lineHeight={0.9}
+                outlineWidth={0.004}
+                outlineColor={outline}
+            >
+                {`Earth Age\n(Years since formation of Earth)`}
+            </Text>
         </group>
     )
 }

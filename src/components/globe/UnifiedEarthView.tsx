@@ -545,14 +545,11 @@ function NorthPoleYearPathRing({
     const ringY = earthPos.y + 1.16 * earthRadius
     const ringRadius = Math.sin(AXIAL_TILT_RAD) * surfaceRadius
     const summer = getProgressForDate(year, 5, 21)
-    const dayColor = isDark ? '#e9d5ff' : theme === 'sepia' ? '#6b21a8' : '#4f46a5'
+    const dayColor = isDark ? '#fde68a' : theme === 'sepia' ? '#d97706' : '#eab308'
     const nightColor = isDark ? '#6b5c87' : theme === 'sepia' ? '#8b7aa5' : '#818cf8'
-    const dawnColor = isDark ? '#fbbf24' : '#f59e0b'
-    const duskColor = isDark ? '#fb7185' : '#be123c'
-    const { daySegments, nightSegments, transitions } = useMemo(() => {
+    const { daySegments, nightSegments } = useMemo(() => {
         const day: THREE.Vector3[][] = []
         const night: THREE.Vector3[][] = []
-        const markers: Array<{ point: THREE.Vector3; kind: 'dawn' | 'dusk' }> = []
         const steps = 240
         const light = new THREE.Vector3(Math.cos(sunAnchorAngle), 0, -Math.sin(sunAnchorAngle)).normalize()
         let current: THREE.Vector3[] = []
@@ -582,7 +579,6 @@ function NorthPoleYearPathRing({
             } else if (isDay !== currentIsDay && previousPoint) {
                 const t = Math.abs(previousDot) / (Math.abs(previousDot) + Math.abs(dot))
                 const crossing = previousPoint.clone().lerp(point, Number.isFinite(t) ? t : 0.5)
-                markers.push({ point: crossing, kind: isDay ? 'dusk' : 'dawn' })
                 current.push(crossing)
                 if (current.length > 1) (currentIsDay ? day : night).push(current)
                 current = [crossing, point]
@@ -596,28 +592,49 @@ function NorthPoleYearPathRing({
         }
 
         if (current.length > 1) (currentIsDay ? day : night).push(current)
-        return { daySegments: day, nightSegments: night, transitions: markers }
+        return { daySegments: day, nightSegments: night }
     }, [earthPos, ringRadius, ringY, summer, sunAnchorAngle])
+    const fillCenter = useMemo(() => new THREE.Vector3(earthPos.x, ringY, earthPos.z), [earthPos.x, earthPos.z, ringY])
+    const makeFillGeometry = useCallback((points: THREE.Vector3[]) => {
+        const geometry = new THREE.BufferGeometry()
+        const vertices: number[] = [fillCenter.x, fillCenter.y, fillCenter.z]
+        const indices: number[] = []
+
+        points.forEach((point) => {
+            vertices.push(point.x, point.y, point.z)
+        })
+        for (let i = 1; i < points.length; i++) {
+            indices.push(0, i, i + 1)
+        }
+
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
+        geometry.setIndex(indices)
+        geometry.computeVertexNormals()
+        return geometry
+    }, [fillCenter])
+    const dayFills = useMemo(() => daySegments.filter((points) => points.length > 2).map(makeFillGeometry), [daySegments, makeFillGeometry])
+    const nightFills = useMemo(() => nightSegments.filter((points) => points.length > 2).map(makeFillGeometry), [nightSegments, makeFillGeometry])
 
     return (
         <group>
+            {nightFills.map((geometry, index) => (
+                <mesh key={`night-fill-${index}`} renderOrder={-2}>
+                    <primitive object={geometry} attach="geometry" />
+                    <meshBasicMaterial color={nightColor} transparent opacity={isDark ? 0.14 : 0.1} side={THREE.DoubleSide} depthWrite={false} />
+                </mesh>
+            ))}
+            {dayFills.map((geometry, index) => (
+                <mesh key={`day-fill-${index}`} renderOrder={-1}>
+                    <primitive object={geometry} attach="geometry" />
+                    <meshBasicMaterial color={dayColor} transparent opacity={isDark ? 0.18 : 0.13} side={THREE.DoubleSide} depthWrite={false} />
+                </mesh>
+            ))}
             {nightSegments.map((points, index) => (
                 <Line key={`north-night-${index}`} points={points} color={nightColor} lineWidth={2} transparent opacity={isDark ? 0.5 : 0.34} depthTest depthWrite={false} />
             ))}
             {daySegments.map((points, index) => (
                 <Line key={`north-day-${index}`} points={points} color={dayColor} lineWidth={2.25} transparent opacity={isDark ? 0.96 : 0.86} depthTest depthWrite={false} />
             ))}
-            {transitions.map(({ point, kind }, index) => {
-                const color = kind === 'dawn' ? dawnColor : duskColor
-                return (
-                    <group key={`north-transition-${kind}-${index}`}>
-                        <mesh position={point}>
-                            <sphereGeometry args={[0.018, 16, 16]} />
-                            <meshBasicMaterial color={color} transparent opacity={0.96} depthTest />
-                        </mesh>
-                    </group>
-                )
-            })}
         </group>
     )
 }

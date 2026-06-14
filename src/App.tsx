@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Axis3d, Globe2, Moon, Orbit, Pause, Play, RotateCcw, Sparkles, Sun, Waves } from 'lucide-react'
+import { Axis3d, Calendar, CalendarClock, Clock3, Globe2, Moon, Orbit, Pause, RotateCcw, Sparkles, Sun, Waves } from 'lucide-react'
 import { UnifiedEarthView, type EarthVisualizationMode } from './components/globe/UnifiedEarthView'
 import { useAppContext } from './contexts'
 
 const MODE_KEY = 'earth-view-mode'
 const SCENE_DARK_KEY = 'earth-view-scene-dark'
+const DAY_MS = 24 * 60 * 60 * 1000
+const YEAR_MS = 365 * DAY_MS
+
+type PreviewMode = 'day' | 'year-no-spin' | 'year-spin'
 
 const MODES: Array<{
   id: EarthVisualizationMode
@@ -52,8 +56,9 @@ export default function App() {
   const { isDark } = useAppContext()
   const [mode, setMode] = useState<EarthVisualizationMode>(readStoredMode)
   const [sceneIsDark, setSceneIsDark] = useState(() => readStoredSceneDark(isDark))
-  const [previewHours, setPreviewHours] = useState(0)
-  const [isPreviewing, setIsPreviewing] = useState(false)
+  const [previewMode, setPreviewMode] = useState<PreviewMode | null>(null)
+  const [dateOffsetMs, setDateOffsetMs] = useState(0)
+  const [rotationOffsetMs, setRotationOffsetMs] = useState(0)
   const [orbitTiltView, setOrbitTiltView] = useState(false)
   const [resetViewKey, setResetViewKey] = useState(0)
   const timezone = useMemo(getBrowserTimezone, [])
@@ -75,32 +80,42 @@ export default function App() {
   }, [sceneIsDark])
 
   useEffect(() => {
-    if (!isPreviewing) return
+    if (!previewMode) return
 
-    const durationMs = 16000
+    const durationMs = previewMode === 'day' ? 16000 : previewMode === 'year-no-spin' ? 48000 : 96000
     const start = performance.now()
     let frame = 0
 
     const animate = (time: number) => {
       const progress = Math.min(1, (time - start) / durationMs)
-      setPreviewHours(progress * 24)
+      const offsetMs = previewMode === 'day' ? progress * DAY_MS : progress * YEAR_MS
+      setDateOffsetMs(offsetMs)
+      setRotationOffsetMs(previewMode === 'year-no-spin' ? 0 : offsetMs)
       if (progress < 1) {
         frame = requestAnimationFrame(animate)
       } else {
-        setIsPreviewing(false)
-        setPreviewHours(0)
+        setPreviewMode(null)
+        setDateOffsetMs(0)
+        setRotationOffsetMs(0)
       }
     }
 
     frame = requestAnimationFrame(animate)
     return () => cancelAnimationFrame(frame)
-  }, [isPreviewing])
+  }, [previewMode])
 
   useEffect(() => {
     if (mode === 'globe') return
-    setIsPreviewing(false)
-    setPreviewHours(0)
+    setPreviewMode(null)
+    setDateOffsetMs(0)
+    setRotationOffsetMs(0)
   }, [mode])
+
+  const togglePreview = (nextMode: PreviewMode) => {
+    setDateOffsetMs(0)
+    setRotationOffsetMs(0)
+    setPreviewMode((current) => current === nextMode ? null : nextMode)
+  }
 
   const activeMode = MODES.find((item) => item.id === mode) ?? MODES[3]
   const effectiveSceneIsDark = mode === 'galaxy' || sceneIsDark
@@ -111,11 +126,13 @@ export default function App() {
         <UnifiedEarthView
           className="earth-canvas"
           mode={mode}
-          timeOffsetHours={mode === 'globe' ? previewHours : 0}
+          dateOffsetMs={mode === 'globe' ? dateOffsetMs : 0}
+          rotationOffsetMs={mode === 'globe' ? rotationOffsetMs : 0}
           isDarkOverride={effectiveSceneIsDark}
           orbitTiltView={orbitTiltView}
           resetViewKey={resetViewKey}
           timezone={timezone}
+          timezoneRingScale={0.72}
         />
 
         <header className="earth-topbar" aria-label="Visualization controls">
@@ -148,19 +165,38 @@ export default function App() {
               </button>
             )}
             {mode === 'globe' && (
-              <button
-                type="button"
-                className="earth-icon-button"
-                onClick={() => {
-                  setPreviewHours(0)
-                  setIsPreviewing((value) => !value)
-                }}
-                aria-pressed={isPreviewing}
-                aria-label={isPreviewing ? 'Stop 24-hour preview' : 'Start 24-hour preview'}
-                title={isPreviewing ? 'Stop 24-hour preview' : 'Start 24-hour preview'}
-              >
-                {isPreviewing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-              </button>
+              <>
+                <button
+                  type="button"
+                  className={`earth-icon-button ${previewMode === 'day' ? 'is-active' : ''}`}
+                  onClick={() => togglePreview('day')}
+                  aria-pressed={previewMode === 'day'}
+                  aria-label={previewMode === 'day' ? 'Stop 24-hour animation' : 'Animate 24 hours'}
+                  title={previewMode === 'day' ? 'Stop 24-hour animation' : 'Animate 24 hours'}
+                >
+                  {previewMode === 'day' ? <Pause aria-hidden="true" /> : <Clock3 aria-hidden="true" />}
+                </button>
+                <button
+                  type="button"
+                  className={`earth-icon-button ${previewMode === 'year-no-spin' ? 'is-active' : ''}`}
+                  onClick={() => togglePreview('year-no-spin')}
+                  aria-pressed={previewMode === 'year-no-spin'}
+                  aria-label={previewMode === 'year-no-spin' ? 'Stop 1-year animation without Earth rotation' : 'Animate 1 year without Earth rotation'}
+                  title={previewMode === 'year-no-spin' ? 'Stop 1-year animation without Earth rotation' : 'Animate 1 year without Earth rotation'}
+                >
+                  {previewMode === 'year-no-spin' ? <Pause aria-hidden="true" /> : <Calendar aria-hidden="true" />}
+                </button>
+                <button
+                  type="button"
+                  className={`earth-icon-button ${previewMode === 'year-spin' ? 'is-active' : ''}`}
+                  onClick={() => togglePreview('year-spin')}
+                  aria-pressed={previewMode === 'year-spin'}
+                  aria-label={previewMode === 'year-spin' ? 'Stop 1-year animation with daily rotations' : 'Animate 1 year with daily rotations'}
+                  title={previewMode === 'year-spin' ? 'Stop 1-year animation with daily rotations' : 'Animate 1 year with daily rotations'}
+                >
+                  {previewMode === 'year-spin' ? <Pause aria-hidden="true" /> : <CalendarClock aria-hidden="true" />}
+                </button>
+              </>
             )}
             {mode !== 'galaxy' && (
               <button
@@ -192,6 +228,7 @@ export default function App() {
             </button>
           ))}
         </nav>
+
       </section>
     </main>
   )

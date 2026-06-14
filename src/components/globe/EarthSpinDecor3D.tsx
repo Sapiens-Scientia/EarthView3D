@@ -188,20 +188,16 @@ export function EarthNorthArrowLocalYNorth({ earthRadius, isDark }: { earthRadiu
     const northConeR = 0.03 * sc
     const northConeH = 0.065 * sc
 
-    const { shaftPoints, coneCenter, labelPos } = useMemo(() => {
+    const { shaftPoints, coneCenter } = useMemo(() => {
         const scInner = decorScale(earthRadius)
         const shaft = 0.24 * scInner
         const cH = 0.065 * scInner
-        const lLift = 0.06 * scInner
-        const lSide = 0.12 * scInner
         const base = new THREE.Vector3(0, earthRadius, 0)
         const shaftEnd = new THREE.Vector3(0, earthRadius + shaft, 0)
         const coneCenterW = new THREE.Vector3(0, shaftEnd.y + cH / 2, 0)
-        const labelPosW = new THREE.Vector3(lSide, shaftEnd.y + cH + lLift, 0)
         return {
             shaftPoints: [base, shaftEnd],
             coneCenter: coneCenterW,
-            labelPos: labelPosW,
         }
     }, [earthRadius])
 
@@ -213,17 +209,6 @@ export function EarthNorthArrowLocalYNorth({ earthRadius, isDark }: { earthRadiu
                 <coneGeometry args={[northConeR, northConeH, 14]} />
                 <meshBasicMaterial color={c.fill} transparent opacity={isDark ? 0.95 : 0.92} />
             </mesh>
-            <Text
-                position={labelPos}
-                fontSize={0.1 * sc}
-                color={c.stroke}
-                anchorX="left"
-                anchorY="middle"
-                outlineWidth={0.004 * sc}
-                outlineColor={isDark ? '#0f172a' : '#f8fafc'}
-            >
-                North
-            </Text>
         </group>
     )
 }

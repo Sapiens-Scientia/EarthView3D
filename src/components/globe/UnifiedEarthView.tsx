@@ -45,7 +45,7 @@ const SEASON_EVENTS = [
 ]
 
 const SEASON_HALO_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const TIMEZONE_OFFSETS = Array.from({ length: 27 }, (_, index) => index - 12)
+const TIMEZONE_OFFSETS = Array.from({ length: 24 }, (_, index) => index - 10)
 
 const SEASON_COLORS = {
     winter: [0.1, 0.48, 0.78] as [number, number, number],
@@ -147,12 +147,6 @@ function getTimezoneOffsetHours(date: Date, timeZone: string) {
     }
 }
 
-function formatUtcMarkerTime(date: Date): string {
-    const hours = String(date.getUTCHours()).padStart(2, '0')
-    const minutes = String(date.getUTCMinutes()).padStart(2, '0')
-    return `${hours}:${minutes} UTC`
-}
-
 function formatTimezoneOffset(offset: number): string {
     if (offset === 0) return 'UTC'
     return `${offset > 0 ? '+' : ''}${offset}`
@@ -227,6 +221,27 @@ function makeEarthTiltQuaternion(year: number) {
 function getNorthHaloAngle(year: number) {
     const northAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(makeEarthTiltQuaternion(year))
     return Math.atan2(-northAxis.z, northAxis.x)
+}
+
+function getSunAnchoredHaloAngle(referenceDate = new Date()) {
+    const year = referenceDate.getFullYear()
+    const progress = getOrbitalProgress(referenceDate)
+    const summer = getProgressForDate(year, 5, 21)
+    return getNorthHaloAngle(year) - (summer - progress) * Math.PI * 2
+}
+
+function getSunAnchoredNorthDirection(date: Date, anchorAngle = getSunAnchoredHaloAngle()) {
+    const year = date.getFullYear()
+    const progress = getOrbitalProgress(date)
+    const summer = getProgressForDate(year, 5, 21)
+    const angle = anchorAngle - (progress - summer) * Math.PI * 2
+    return new THREE.Vector3(Math.cos(angle), 0, -Math.sin(angle)).normalize()
+}
+
+function makeEarthTiltQuaternionForNorthDirection(direction: THREE.Vector3) {
+    const northAxis = direction.clone().setY(0).normalize().multiplyScalar(Math.sin(AXIAL_TILT_RAD))
+    northAxis.y = Math.cos(AXIAL_TILT_RAD)
+    return new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), northAxis.normalize())
 }
 
 function getHaloDirectionForProgress(currentProgress: number, targetProgress: number, year: number) {
@@ -311,7 +326,7 @@ function getCameraPosition(mode: EarthVisualizationMode, date = new Date()) {
     const julyProgress = getProgressForDate(year, 6, 1)
     if (mode === 'globe') {
         const currentProgress = getOrbitalProgress(date)
-        return cameraVectorForDirection(getHaloDirectionForProgress(currentProgress, julyProgress, year), 3.55, 0.68)
+        return cameraVectorForDirection(getSunDirectionFromEarth(currentProgress), 3.55, 0.68)
     }
     if (mode === 'orbit') return cameraVectorForProgress(0.5, 6.1, 5.85)
     if (mode === 'galaxy') return new THREE.Vector3(0, 12.2, 17.5)
@@ -490,8 +505,8 @@ function GlobePoleDecor({ isDark, theme }: { isDark: boolean; theme: ThemeMode }
         }
     }, [])
 
-    const rotStroke = isDark ? '#bae6fd' : theme === 'sepia' ? '#0369a1' : '#1f7ca8'
-    const rotFill = isDark ? '#38bdf8' : theme === 'sepia' ? '#0ea5e9' : '#46a6d8'
+    const rotStroke = isDark ? '#fdba74' : '#ea580c'
+    const rotFill = rotStroke
     const nStroke = isDark ? '#e9d5ff' : theme === 'sepia' ? '#6b21a8' : '#4f46a5'
     const nFill = isDark ? '#d8b4fe' : theme === 'sepia' ? '#7c3aed' : '#6366d9'
 
@@ -507,11 +522,98 @@ function GlobePoleDecor({ isDark, theme }: { isDark: boolean; theme: ThemeMode }
                 <coneGeometry args={[0.02, 0.042, 12]} />
                 <meshBasicMaterial color={nFill} transparent opacity={isDark ? 0.95 : 0.92} />
             </mesh>
-            <Billboard position={[0.048, 1.184, 0]}>
-                <Text fontSize={0.038} color={nStroke} anchorX="left" anchorY="middle" outlineWidth={0.002} outlineColor={isDark ? '#0f172a' : '#ffffff'}>
-                    North
-                </Text>
-            </Billboard>
+        </group>
+    )
+}
+
+function NorthPoleYearPathRing({
+    earthPos,
+    earthRadius,
+    sunDirection,
+    isDark,
+    theme,
+}: {
+    earthPos: THREE.Vector3
+    earthRadius: number
+    sunDirection: THREE.Vector3
+    isDark: boolean
+    theme: ThemeMode
+}) {
+    const surfaceRadius = earthRadius * 1.014
+    const ringY = earthPos.y + Math.cos(AXIAL_TILT_RAD) * surfaceRadius
+    const ringRadius = Math.sin(AXIAL_TILT_RAD) * surfaceRadius
+    const dayColor = isDark ? '#e9d5ff' : theme === 'sepia' ? '#6b21a8' : '#4f46a5'
+    const nightColor = isDark ? '#6b5c87' : theme === 'sepia' ? '#8b7aa5' : '#818cf8'
+    const dawnColor = isDark ? '#fbbf24' : '#f59e0b'
+    const duskColor = isDark ? '#fb7185' : '#be123c'
+    const { daySegments, nightSegments, transitions } = useMemo(() => {
+        const day: THREE.Vector3[][] = []
+        const night: THREE.Vector3[][] = []
+        const markers: Array<{ point: THREE.Vector3; kind: 'dawn' | 'dusk' }> = []
+        const steps = 240
+        const light = sunDirection.clone().normalize()
+        let current: THREE.Vector3[] = []
+        let currentIsDay = false
+        let previousPoint: THREE.Vector3 | undefined
+        let previousDot = 0
+
+        const pointAt = (index: number) => {
+            const angle = (index / steps) * Math.PI * 2
+            const point = new THREE.Vector3(
+                earthPos.x + Math.cos(angle) * ringRadius,
+                ringY,
+                earthPos.z - Math.sin(angle) * ringRadius,
+            )
+            const normal = point.clone().sub(earthPos).normalize()
+            return { point, dot: normal.dot(light) }
+        }
+
+        for (let i = 0; i <= steps; i++) {
+            const { point, dot } = pointAt(i)
+            const isDay = dot >= 0
+
+            if (i === 0) {
+                current = [point]
+                currentIsDay = isDay
+            } else if (isDay !== currentIsDay && previousPoint) {
+                const t = Math.abs(previousDot) / (Math.abs(previousDot) + Math.abs(dot))
+                const crossing = previousPoint.clone().lerp(point, Number.isFinite(t) ? t : 0.5)
+                markers.push({ point: crossing, kind: isDay ? 'dawn' : 'dusk' })
+                current.push(crossing)
+                if (current.length > 1) (currentIsDay ? day : night).push(current)
+                current = [crossing, point]
+                currentIsDay = isDay
+            } else {
+                current.push(point)
+            }
+
+            previousPoint = point
+            previousDot = dot
+        }
+
+        if (current.length > 1) (currentIsDay ? day : night).push(current)
+        return { daySegments: day, nightSegments: night, transitions: markers }
+    }, [earthPos, ringRadius, ringY, sunDirection])
+
+    return (
+        <group>
+            {nightSegments.map((points, index) => (
+                <Line key={`north-night-${index}`} points={points} color={nightColor} lineWidth={2} transparent opacity={isDark ? 0.5 : 0.34} depthTest depthWrite={false} />
+            ))}
+            {daySegments.map((points, index) => (
+                <Line key={`north-day-${index}`} points={points} color={dayColor} lineWidth={2.25} transparent opacity={isDark ? 0.96 : 0.86} depthTest depthWrite={false} />
+            ))}
+            {transitions.map(({ point, kind }, index) => {
+                const color = kind === 'dawn' ? dawnColor : duskColor
+                return (
+                    <group key={`north-transition-${kind}-${index}`}>
+                        <mesh position={point}>
+                            <sphereGeometry args={[0.018, 16, 16]} />
+                            <meshBasicMaterial color={color} transparent opacity={0.96} depthTest />
+                        </mesh>
+                    </group>
+                )
+            })}
         </group>
     )
 }
@@ -523,7 +625,10 @@ function EarthBody({
     isDark,
     theme,
     progress,
-    timeOffsetHours,
+    sceneDate,
+    rotationDate,
+    rotationProgress,
+    northDirection,
     homeCoords,
 }: {
     mode: EarthVisualizationMode
@@ -532,10 +637,13 @@ function EarthBody({
     isDark: boolean
     theme: ThemeMode
     progress: number
-    timeOffsetHours: number
+    sceneDate: Date
+    rotationDate: Date
+    rotationProgress: number
+    northDirection?: THREE.Vector3
     homeCoords?: EarthCoords
 }) {
-    const year = new Date().getFullYear()
+    const year = sceneDate.getFullYear()
     const bodyRef = useRef<THREE.Group>(null)
     const scaleRef = useRef<THREE.Group>(null)
     const spinRef = useRef<THREE.Group>(null)
@@ -543,8 +651,13 @@ function EarthBody({
     const initialPosition = useRef(position.clone())
     const initialScale = useRef(radius)
     const scaleTarget = useMemo(() => new THREE.Vector3(radius, radius, radius), [radius])
-    const tiltQuaternion = useMemo(() => makeEarthTiltQuaternion(year), [year])
+    const tiltQuaternion = useMemo(() => (
+        northDirection
+            ? makeEarthTiltQuaternionForNorthDirection(northDirection)
+            : makeEarthTiltQuaternion(year)
+    ), [northDirection, year])
     const sunDirection = useMemo(() => getSunDirectionFromEarth(progress), [progress])
+    const spinSunDirection = useMemo(() => getSunDirectionFromEarth(rotationProgress), [rotationProgress])
 
     useEffect(() => {
         spinInitializedRef.current = false
@@ -555,11 +668,11 @@ function EarthBody({
         scaleRef.current?.scale.lerp(scaleTarget, 0.08)
         if (!spinRef.current) return
         if (!spinInitializedRef.current) {
-            spinRef.current.rotation.y = getDailySpinAngle(new Date(Date.now() + timeOffsetHours * 3600000), tiltQuaternion, sunDirection)
+            spinRef.current.rotation.y = getDailySpinAngle(rotationDate, tiltQuaternion, spinSunDirection)
             spinInitializedRef.current = true
         }
         if (mode === 'globe') {
-            spinRef.current.rotation.y = getDailySpinAngle(new Date(Date.now() + timeOffsetHours * 3600000), tiltQuaternion, sunDirection)
+            spinRef.current.rotation.y = getDailySpinAngle(rotationDate, tiltQuaternion, spinSunDirection)
         } else {
             spinRef.current.rotation.y += delta * 0.18
         }
@@ -1349,36 +1462,76 @@ function GalaxyTimeAxis({
     )
 }
 
-function GlobeSeasonHalo({ isDark, theme, timeOffsetHours, dateTextColor, timezone }: { isDark: boolean; theme: ThemeMode; timeOffsetHours: number; dateTextColor: string; timezone: string }) {
+function GlobeSeasonHalo({
+    isDark,
+    theme,
+    dateOffsetMs,
+    rotationOffsetMs,
+    dateTextColor,
+    timezone,
+    timezoneRingScale,
+    northDirection,
+}: {
+    isDark: boolean
+    theme: ThemeMode
+    dateOffsetMs: number
+    rotationOffsetMs: number
+    dateTextColor: string
+    timezone: string
+    timezoneRingScale: number
+    northDirection: THREE.Vector3
+}) {
     const [baseNow, setBaseNow] = useState(() => new Date())
-    const now = useMemo(() => new Date(baseNow.getTime() + timeOffsetHours * 3600000), [baseNow, timeOffsetHours])
+    const now = useMemo(() => new Date(baseNow.getTime() + dateOffsetMs), [baseNow, dateOffsetMs])
+    const ringNow = useMemo(() => new Date(baseNow.getTime() + rotationOffsetMs), [baseNow, rotationOffsetMs])
     const year = now.getFullYear()
     const progress = getOrbitalProgress(now)
-    const utcTimeLabel = useMemo(() => formatUtcMarkerTime(now), [now])
-    const localTimeLabel = useMemo(() => formatNowMarkerTime(now, timezone), [now, timezone])
-    const localTimeParts = useMemo(() => getTimePartsInTimezone(now, timezone), [now, timezone])
+    const ringProgress = getOrbitalProgress(ringNow)
+    const localTimeLabel = useMemo(() => formatNowMarkerTime(ringNow, timezone), [ringNow, timezone])
     const dateLabel = useMemo(() => formatSeasonHaloDate(now), [now])
     const center = new THREE.Vector3(0, 1.16, 0)
     const radius = Math.tan(AXIAL_TILT_RAD) * center.y
     const hourRadius = radius * 0.6
-    const northAxis = useMemo(() => new THREE.Vector3(0, 1, 0).applyQuaternion(makeEarthTiltQuaternion(year)).normalize(), [year])
+    const timezoneRadius = (hourRadius - 0.052) * timezoneRingScale
+    const northAxis = useMemo(() => {
+        const axis = northDirection.clone().setY(0).normalize().multiplyScalar(Math.sin(AXIAL_TILT_RAD))
+        axis.y = Math.cos(AXIAL_TILT_RAD)
+        return axis.normalize()
+    }, [northDirection])
     const hourCenter = useMemo(() => northAxis.clone().multiplyScalar(1.3), [northAxis])
+    const timezoneCenter = useMemo(() => northAxis.clone().multiplyScalar(1.024), [northAxis])
     const hourDiskQuaternion = useMemo(() => new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), northAxis), [northAxis])
     const spring = getProgressForDate(year, 2, 20)
     const summer = getProgressForDate(year, 5, 21)
     const autumn = getProgressForDate(year, 8, 22)
     const winter = getProgressForDate(year, 11, 21)
+    const sunAnchorAngle = useMemo(() => getSunAnchoredHaloAngle(), [])
     const hourBasis = useMemo(() => {
-        let u = getHaloDirectionForProgress(progress, summer, year)
-            .negate()
+        const sunDirection = new THREE.Vector3(Math.cos(sunAnchorAngle), 0, -Math.sin(sunAnchorAngle))
+        let u = sunDirection
             .projectOnPlane(northAxis)
+            .negate()
         if (u.lengthSq() < 0.001) u = ECLIPTIC_NORTH.clone().projectOnPlane(northAxis)
         u.normalize()
         const v = new THREE.Vector3().crossVectors(northAxis, u).normalize()
         return { u, v }
-    }, [northAxis, progress, summer, year])
-    const northHaloAngle = useMemo(() => getNorthHaloAngle(year), [year])
-
+    }, [northAxis, sunAnchorAngle])
+    const tiltQuaternion = useMemo(() => makeEarthTiltQuaternionForNorthDirection(northDirection), [northDirection])
+    const ringSunDirection = useMemo(() => getSunDirectionFromEarth(ringProgress), [ringProgress])
+    const ringSpinAngle = useMemo(() => getDailySpinAngle(ringNow, tiltQuaternion, ringSunDirection), [ringNow, ringSunDirection, tiltQuaternion])
+    const timezoneBasis = useMemo(() => {
+        const u = new THREE.Vector3(1, 0, 0)
+            .applyAxisAngle(ECLIPTIC_NORTH, ringSpinAngle)
+            .applyQuaternion(tiltQuaternion)
+            .projectOnPlane(northAxis)
+            .normalize()
+        const v = new THREE.Vector3(0, 0, -1)
+            .applyAxisAngle(ECLIPTIC_NORTH, ringSpinAngle)
+            .applyQuaternion(tiltQuaternion)
+            .projectOnPlane(northAxis)
+            .normalize()
+        return { u, v }
+    }, [northAxis, ringSpinAngle, tiltQuaternion])
     useEffect(() => {
         let interval: ReturnType<typeof setInterval> | undefined
         const timeout = setTimeout(() => {
@@ -1393,10 +1546,9 @@ function GlobeSeasonHalo({ isDark, theme, timeOffsetHours, dateTextColor, timezo
     }, [])
 
     const point = useCallback((p: number, r = radius) => {
-        // Rotate the halo calendar so the globe's north pointer lands on today's date.
-        const angle = northHaloAngle - (p - progress) * Math.PI * 2
+        const angle = sunAnchorAngle - (p - summer) * Math.PI * 2
         return new THREE.Vector3(center.x + Math.cos(angle) * r, center.y, center.z - Math.sin(angle) * r)
-    }, [center.x, center.y, center.z, northHaloAngle, progress, radius])
+    }, [center.x, center.y, center.z, radius, summer, sunAnchorAngle])
     const arc = useCallback((start: number, end: number) => {
         const pts: THREE.Vector3[] = []
         for (let i = 0; i <= 44; i++) {
@@ -1410,6 +1562,12 @@ function GlobeSeasonHalo({ isDark, theme, timeOffsetHours, dateTextColor, timezo
             .add(hourBasis.u.clone().multiplyScalar(Math.cos(angle) * r))
             .add(hourBasis.v.clone().multiplyScalar(Math.sin(angle) * r))
     }, [hourBasis, hourCenter, hourRadius])
+    const timezonePoint = useCallback((hourProgress: number, r = hourRadius) => {
+        const angle = hourProgress * Math.PI * 2
+        return timezoneCenter.clone()
+            .add(timezoneBasis.u.clone().multiplyScalar(Math.cos(angle) * r))
+            .add(timezoneBasis.v.clone().multiplyScalar(Math.sin(angle) * r))
+    }, [hourRadius, timezoneBasis, timezoneCenter])
     const hourArc = useMemo(() => {
         const pts: THREE.Vector3[] = []
         for (let i = 0; i <= 96; i++) {
@@ -1417,20 +1575,18 @@ function GlobeSeasonHalo({ isDark, theme, timeOffsetHours, dateTextColor, timezo
         }
         return pts
     }, [hourPoint])
-    const utcHourProgress = (now.getUTCHours() + now.getUTCMinutes() / 60) / 24
-    const localHourProgress = (localTimeParts.hour + localTimeParts.minute / 60) / 24
-    const localTimezoneOffset = getTimezoneOffsetHours(now, timezone)
+    const localTimezoneOffset = getTimezoneOffsetHours(ringNow, timezone)
+    const localTimezoneProgress = positiveModulo(localTimezoneOffset, 24) / 24
     const timezoneRingArc = useMemo(() => {
         const pts: THREE.Vector3[] = []
         for (let i = 0; i <= 128; i++) {
-            pts.push(hourPoint(i / 128, hourRadius - 0.052))
+            pts.push(timezonePoint(i / 128, timezoneRadius))
         }
         return pts
-    }, [hourPoint, hourRadius])
+    }, [timezonePoint, timezoneRadius])
     const timezoneTicks = useMemo(() => {
-        const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60
         return TIMEZONE_OFFSETS.map((offset) => {
-            const zoneProgress = positiveModulo(utcHours + offset, 24) / 24
+            const zoneProgress = positiveModulo(offset, 24) / 24
             return {
                 offset,
                 progress: zoneProgress,
@@ -1438,7 +1594,7 @@ function GlobeSeasonHalo({ isDark, theme, timeOffsetHours, dateTextColor, timezo
                 isLocal: Math.abs(offset - localTimezoneOffset) < 0.01,
             }
         })
-    }, [localTimezoneOffset, now])
+    }, [localTimezoneOffset])
 
     const guideColor = isDark ? '#e9d5ff' : theme === 'sepia' ? '#7c3aed' : '#5b57c8'
     const outline = isDark ? '#0f172a' : '#ffffff'
@@ -1494,23 +1650,7 @@ function GlobeSeasonHalo({ isDark, theme, timeOffsetHours, dateTextColor, timezo
     const timezoneTextColor = isDark ? '#bbf7d0' : '#166534'
     const timezoneUtcColor = isDark ? '#fef08a' : '#a16207'
     const timezoneLocalColor = isDark ? '#f0abfc' : '#a21caf'
-    const localHourPoint = hourPoint(localHourProgress)
-    const localHourLabelPoint = hourPoint(localHourProgress, hourRadius + 0.108)
-    const localHourMotionArrow = useMemo(() => {
-        const start = localHourPoint.clone()
-        const direction = hourPoint(localHourProgress + 0.018)
-            .sub(hourPoint(localHourProgress - 0.018))
-            .normalize()
-        const tip = start.clone().add(direction.clone().multiplyScalar(0.062))
-        const coneHeight = 0.028
-        return {
-            start,
-            tip,
-            coneCenter: tip.clone().sub(direction.clone().multiplyScalar(coneHeight / 2)),
-            coneHeight,
-            coneQuaternion: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction),
-        }
-    }, [hourPoint, hourRadius, localHourPoint, localHourProgress])
+    const localHourLabelPoint = timezonePoint(localTimezoneProgress, timezoneRadius + 0.07)
 
     return (
         <group>
@@ -1565,8 +1705,8 @@ function GlobeSeasonHalo({ isDark, theme, timeOffsetHours, dateTextColor, timezo
                     <group key={`timezone-${offset}`}>
                         <Line
                             points={[
-                                hourPoint(zoneProgress, hourRadius - 0.078),
-                                hourPoint(zoneProgress, hourRadius - (isUtc || isLocal ? 0.02 : 0.038)),
+                                timezonePoint(zoneProgress, timezoneRadius - 0.026),
+                                timezonePoint(zoneProgress, timezoneRadius + (isUtc || isLocal ? 0.032 : 0.014)),
                             ]}
                             color={color}
                             lineWidth={isUtc || isLocal ? 1.55 : 0.85}
@@ -1574,7 +1714,7 @@ function GlobeSeasonHalo({ isDark, theme, timeOffsetHours, dateTextColor, timezo
                             opacity={isDark ? (isUtc || isLocal ? 0.98 : 0.72) : (isUtc || isLocal ? 0.92 : 0.6)}
                             depthTest
                         />
-                        <Billboard position={hourPoint(zoneProgress, hourRadius - 0.052)}>
+                        <Billboard position={timezonePoint(zoneProgress, timezoneRadius - 0.046)}>
                             <Text
                                 fontSize={isUtc || isLocal ? 0.021 : 0.016}
                                 color={textColor}
@@ -1589,17 +1729,8 @@ function GlobeSeasonHalo({ isDark, theme, timeOffsetHours, dateTextColor, timezo
                     </group>
                 )
             })}
-            <mesh position={localHourPoint}>
-                <sphereGeometry args={[0.013, 16, 16]} />
-                <meshBasicMaterial color={localHourColor} transparent opacity={0.96} depthTest />
-            </mesh>
-            <Line points={[localHourMotionArrow.start, localHourMotionArrow.tip]} color={localHourColor} lineWidth={1.25} transparent opacity={isDark ? 0.9 : 0.78} depthTest />
-            <mesh position={localHourMotionArrow.coneCenter} quaternion={localHourMotionArrow.coneQuaternion}>
-                <coneGeometry args={[0.011, localHourMotionArrow.coneHeight, 14]} />
-                <meshBasicMaterial color={localHourColor} transparent opacity={isDark ? 0.96 : 0.88} depthTest />
-            </mesh>
             <Billboard position={localHourLabelPoint}>
-                <Text fontSize={0.026} color={localHourColor} anchorX="center" anchorY="middle" outlineWidth={0.0023} outlineColor={outline}>
+                <Text fontSize={0.04} color="#ffffff" anchorX="center" anchorY="middle" outlineWidth={0.003} outlineColor="#000000">
                     {localTimeLabel}
                 </Text>
             </Billboard>
@@ -1681,21 +1812,16 @@ function GlobeSeasonHalo({ isDark, theme, timeOffsetHours, dateTextColor, timezo
             })}
             <mesh position={current}>
                 <sphereGeometry args={[0.018, 16, 16]} />
-                <meshBasicMaterial color={dateTextColor} transparent opacity={0.98} depthTest />
+                <meshBasicMaterial color={northVectorColor} transparent opacity={0.98} depthTest />
             </mesh>
-            <Line points={[northMotionArrow.start, northMotionArrow.tip]} color={dateTextColor} lineWidth={1.45} transparent opacity={isDark ? 0.9 : 0.78} depthTest />
+            <Line points={[northMotionArrow.start, northMotionArrow.tip]} color={northVectorColor} lineWidth={1.45} transparent opacity={isDark ? 0.9 : 0.78} depthTest />
             <mesh position={northMotionArrow.coneCenter} quaternion={northMotionArrow.coneQuaternion}>
                 <coneGeometry args={[0.013, northMotionArrow.coneHeight, 14]} />
-                <meshBasicMaterial color={dateTextColor} transparent opacity={isDark ? 0.96 : 0.88} depthTest />
+                <meshBasicMaterial color={northVectorColor} transparent opacity={isDark ? 0.96 : 0.88} depthTest />
             </mesh>
             <Billboard position={center.clone().add(new THREE.Vector3(0, 0.018, 0))}>
-                <Text fontSize={0.029} color={dateTextColor} anchorX="center" anchorY="middle" outlineWidth={0.0024} outlineColor={outline}>
+                <Text fontSize={0.04} color="#ffffff" anchorX="center" anchorY="middle" outlineWidth={0.003} outlineColor="#000000">
                     {dateLabel}
-                </Text>
-            </Billboard>
-            <Billboard position={point(progress, radius + 0.095)}>
-                <Text fontSize={0.028} color={guideColor} anchorX="center" anchorY="middle" outlineWidth={0.0025} outlineColor={outline}>
-                    {utcTimeLabel}
                 </Text>
             </Billboard>
         </group>
@@ -1706,24 +1832,33 @@ function UnifiedScene({
     mode,
     isDark,
     theme,
-    timeOffsetHours,
+    dateOffsetMs,
+    rotationOffsetMs,
     homeCoords,
     timezone,
+    timezoneRingScale,
     orbitTiltView,
     resetViewKey,
 }: {
     mode: EarthVisualizationMode
     isDark: boolean
     theme: ThemeMode
-    timeOffsetHours: number
+    dateOffsetMs: number
+    rotationOffsetMs: number
     homeCoords?: EarthCoords
     timezone: string
+    timezoneRingScale: number
     orbitTiltView: boolean
     resetViewKey: number
 }) {
     const { camera } = useThree()
-    const sceneDate = useMemo(() => new Date(Date.now() + timeOffsetHours * 3600000), [timeOffsetHours])
+    const sceneDate = useMemo(() => new Date(Date.now() + dateOffsetMs), [dateOffsetMs])
+    const rotationDate = useMemo(() => new Date(Date.now() + rotationOffsetMs), [rotationOffsetMs])
     const progress = getOrbitalProgress(sceneDate)
+    const rotationProgress = getOrbitalProgress(rotationDate)
+    const globeSunDirection = useMemo(() => getSunDirectionFromEarth(progress), [progress])
+    const sunAnchorAngle = useMemo(() => getSunAnchoredHaloAngle(), [])
+    const globeNorthDirection = useMemo(() => getSunAnchoredNorthDirection(sceneDate, sunAnchorAngle), [sceneDate, sunAnchorAngle])
     const yearProgress = progress
     const nowT = (5 + yearProgress) / SPIRAL_TURNS
     const earthPos = useMemo(() => {
@@ -1792,7 +1927,7 @@ function UnifiedScene({
             <Stars isDark={isDark} theme={theme} />
             <group quaternion={orbitViewQuaternion}>
                 <pointLight position={sunPos.toArray()} intensity={mode === 'globe' ? 0 : isDark ? 2.5 : 2} color={isDark || theme === 'sepia' ? '#fde68a' : '#fff4c2'} distance={16} decay={1.4} />
-                {mode === 'globe' && <GlobeSeasonHalo isDark={isDark} theme={theme} timeOffsetHours={timeOffsetHours} dateTextColor={dateTextColor} timezone={timezone} />}
+                {mode === 'globe' && <GlobeSeasonHalo isDark={isDark} theme={theme} dateOffsetMs={dateOffsetMs} rotationOffsetMs={rotationOffsetMs} dateTextColor={dateTextColor} timezone={timezone} timezoneRingScale={timezoneRingScale} northDirection={globeNorthDirection} />}
                 {mode === 'orbit' && <OrbitAnnotations isDark={isDark} theme={theme} progress={progress} />}
                 {mode === 'spiral' && <SpiralAnnotations isDark={isDark} theme={theme} />}
                 {mode === 'galaxy' && <GalaxyHistoryModel isDark={isDark} theme={theme} />}
@@ -1817,7 +1952,8 @@ function UnifiedScene({
                         gapSize={0.06}
                     />
                 )}
-                {mode !== 'galaxy' && <EarthBody mode={mode} position={earthPos} radius={earthRadius} isDark={isDark} theme={theme} progress={progress} timeOffsetHours={timeOffsetHours} homeCoords={homeCoords} />}
+                {mode !== 'galaxy' && <EarthBody mode={mode} position={earthPos} radius={earthRadius} isDark={isDark} theme={theme} progress={progress} sceneDate={sceneDate} rotationDate={rotationDate} rotationProgress={rotationProgress} northDirection={mode === 'globe' ? globeNorthDirection : undefined} homeCoords={homeCoords} />}
+                {mode === 'globe' && <NorthPoleYearPathRing earthPos={earthPos} earthRadius={earthRadius} sunDirection={globeSunDirection} isDark={isDark} theme={theme} />}
                 {mode === 'spiral' && (
                     <Text position={[earthPos.x, earthPos.y + earthRadius + 0.18, earthPos.z]} fontSize={0.11} color={isDark || theme === 'sepia' ? '#60a5fa' : '#3f8fe8'} anchorX="center" anchorY="bottom" outlineWidth={0.004} outlineColor={isDark ? '#0f172a' : '#ffffff'}>
                         NOW
@@ -1828,11 +1964,12 @@ function UnifiedScene({
                 key={controlsModeKey}
                 ref={controlsRef}
                 enableZoom
-                enablePan={mode === 'spiral' || mode === 'galaxy'}
+                enablePan
                 minDistance={mode === 'globe' ? 1.5 : mode === 'orbit' ? 1 : 2}
                 maxDistance={mode === 'globe' ? 6 : mode === 'orbit' ? 10 : mode === 'galaxy' ? 24 : 18}
                 rotateSpeed={0.5}
                 zoomSpeed={0.55}
+                panSpeed={0.55}
                 autoRotate={false}
                 minPolarAngle={mode === 'orbit' ? 0.1 : undefined}
                 maxPolarAngle={mode === 'orbit' ? Math.PI - 0.1 : undefined}
@@ -1855,15 +1992,17 @@ interface UnifiedEarthViewProps {
     className?: string
     style?: React.CSSProperties
     mode: EarthVisualizationMode
-    timeOffsetHours?: number
+    dateOffsetMs?: number
+    rotationOffsetMs?: number
     isDarkOverride?: boolean
     orbitTiltView?: boolean
     resetViewKey?: number
     homeCoords?: EarthCoords
     timezone: string
+    timezoneRingScale?: number
 }
 
-export function UnifiedEarthView({ className, style, mode, timeOffsetHours = 0, isDarkOverride, orbitTiltView = false, resetViewKey = 0, homeCoords, timezone }: UnifiedEarthViewProps) {
+export function UnifiedEarthView({ className, style, mode, dateOffsetMs = 0, rotationOffsetMs = 0, isDarkOverride, orbitTiltView = false, resetViewKey = 0, homeCoords, timezone, timezoneRingScale = 1 }: UnifiedEarthViewProps) {
     const { isDark, theme } = useAppContext()
     const [ready, setReady] = useState(false)
     const [contextResetKey, setContextResetKey] = useState(0)
@@ -1900,7 +2039,7 @@ export function UnifiedEarthView({ className, style, mode, timeOffsetHours = 0, 
                 }}
             >
                 <SceneBackground color={bgColor} />
-                <UnifiedScene mode={mode} isDark={sceneIsDark} theme={theme} timeOffsetHours={timeOffsetHours} homeCoords={homeCoords} timezone={timezone} orbitTiltView={orbitTiltView} resetViewKey={resetViewKey} />
+                <UnifiedScene mode={mode} isDark={sceneIsDark} theme={theme} dateOffsetMs={dateOffsetMs} rotationOffsetMs={rotationOffsetMs} homeCoords={homeCoords} timezone={timezone} timezoneRingScale={timezoneRingScale} orbitTiltView={orbitTiltView} resetViewKey={resetViewKey} />
             </Canvas>
         </div>
     )

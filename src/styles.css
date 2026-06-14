@@ -220,6 +220,7 @@ button {
   color: #ecfeff;
 }
 
+.earth-icon-button.is-active,
 .earth-action-button.is-active,
 .earth-stage-light .earth-mode-button.is-active {
   border-color: rgba(8, 145, 178, 0.32);
@@ -227,6 +228,7 @@ button {
   color: #155e75;
 }
 
+.earth-stage-dark .earth-icon-button.is-active,
 .earth-stage-dark .earth-action-button.is-active {
   border-color: rgba(34, 211, 238, 0.7);
   background: rgba(8, 145, 178, 0.78);

@@ -46,6 +46,7 @@ const SEASON_EVENTS = [
 
 const SEASON_HALO_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const TIMEZONE_OFFSETS = Array.from({ length: 24 }, (_, index) => index - 10)
+const EASTERN_TIMEZONE = 'America/New_York'
 
 const SEASON_COLORS = {
     winter: [0.1, 0.48, 0.78] as [number, number, number],
@@ -120,12 +121,14 @@ function getTimePartsInTimezone(date: Date, timeZone: string) {
     const parts = new Intl.DateTimeFormat('en-US', {
         hour: '2-digit',
         minute: '2-digit',
+        second: '2-digit',
         hourCycle: 'h23',
         timeZone,
     }).formatToParts(date)
     const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? date.getHours())
     const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? date.getMinutes())
-    return { hour: positiveModulo(hour, 24), minute }
+    const second = Number(parts.find((part) => part.type === 'second')?.value ?? date.getSeconds())
+    return { hour: positiveModulo(hour, 24), minute, second }
 }
 
 function getTimezoneOffsetHours(date: Date, timeZone: string) {
@@ -1560,7 +1563,8 @@ function GlobeSeasonHalo({
     const year = now.getFullYear()
     const progress = getOrbitalProgress(now)
     const ringProgress = getOrbitalProgress(ringNow)
-    const localTimeLabel = useMemo(() => formatNowMarkerTime(ringNow, timezone), [ringNow, timezone])
+    const easternTimeLabel = useMemo(() => formatNowMarkerTime(ringNow, EASTERN_TIMEZONE), [ringNow])
+    const easternTimeParts = useMemo(() => getTimePartsInTimezone(ringNow, EASTERN_TIMEZONE), [ringNow])
     const dateLabel = useMemo(() => formatSeasonHaloDate(now), [now])
     const center = new THREE.Vector3(0, 1.16, 0)
     const radius = Math.tan(AXIAL_TILT_RAD) * center.y
@@ -1709,7 +1713,24 @@ function GlobeSeasonHalo({
     const timezoneTextColor = isDark ? '#bbf7d0' : '#166534'
     const timezoneUtcColor = isDark ? '#fef08a' : '#a16207'
     const timezoneLocalColor = isDark ? '#f0abfc' : '#a21caf'
-    const localHourLabelPoint = timezonePoint(localTimezoneProgress, timezoneRadius + 0.07)
+    const easternHourProgress = (easternTimeParts.hour + easternTimeParts.minute / 60 + easternTimeParts.second / 3600) / 24
+    const easternHourMarkerPoint = hourPoint(easternHourProgress, hourRadius)
+    const easternHourLabelPoint = hourPoint(easternHourProgress, hourRadius + 0.09)
+    const easternHourMotionArrow = useMemo(() => {
+        const start = easternHourMarkerPoint.clone()
+        const direction = hourPoint(easternHourProgress + 0.018, hourRadius)
+            .sub(hourPoint(easternHourProgress - 0.018, hourRadius))
+            .normalize()
+        const tip = start.clone().add(direction.clone().multiplyScalar(0.074))
+        const coneHeight = 0.028
+        return {
+            start,
+            tip,
+            coneCenter: tip.clone().sub(direction.clone().multiplyScalar(coneHeight / 2)),
+            coneHeight,
+            coneQuaternion: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction),
+        }
+    }, [easternHourMarkerPoint, easternHourProgress, hourPoint, hourRadius])
 
     return (
         <group>
@@ -1750,7 +1771,7 @@ function GlobeSeasonHalo({
                                     outlineWidth={0.0018}
                                     outlineColor={outline}
                                 >
-                                    {String(hour).padStart(2, '0')}
+                                    {`${hour % 12 === 0 ? 12 : hour % 12}${hour < 12 ? 'am' : 'pm'}`}
                                 </Text>
                             </Billboard>
                         )}
@@ -1788,9 +1809,18 @@ function GlobeSeasonHalo({
                     </group>
                 )
             })}
-            <Billboard position={localHourLabelPoint}>
+            <mesh position={easternHourMarkerPoint}>
+                <sphereGeometry args={[0.018, 18, 18]} />
+                <meshBasicMaterial color={localHourColor} transparent opacity={0.98} depthTest />
+            </mesh>
+            <Line points={[easternHourMotionArrow.start, easternHourMotionArrow.tip]} color={localHourColor} lineWidth={1.35} transparent opacity={isDark ? 0.92 : 0.82} depthTest />
+            <mesh position={easternHourMotionArrow.coneCenter} quaternion={easternHourMotionArrow.coneQuaternion}>
+                <coneGeometry args={[0.011, easternHourMotionArrow.coneHeight, 12]} />
+                <meshBasicMaterial color={localHourColor} transparent opacity={isDark ? 0.96 : 0.88} depthTest />
+            </mesh>
+            <Billboard position={easternHourLabelPoint}>
                 <Text fontSize={0.04} color="#ffffff" anchorX="center" anchorY="middle" outlineWidth={0.003} outlineColor="#000000">
-                    {localTimeLabel}
+                    {easternTimeLabel}
                 </Text>
             </Billboard>
             <Line points={arc(0, 1)} color={guideColor} lineWidth={0.85} transparent opacity={isDark ? 0.42 : 0.32} depthTest />

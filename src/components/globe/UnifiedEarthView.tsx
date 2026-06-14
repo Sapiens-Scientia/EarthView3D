@@ -529,19 +529,22 @@ function GlobePoleDecor({ isDark, theme }: { isDark: boolean; theme: ThemeMode }
 function NorthPoleYearPathRing({
     earthPos,
     earthRadius,
-    sunDirection,
+    year,
+    sunAnchorAngle,
     isDark,
     theme,
 }: {
     earthPos: THREE.Vector3
     earthRadius: number
-    sunDirection: THREE.Vector3
+    year: number
+    sunAnchorAngle: number
     isDark: boolean
     theme: ThemeMode
 }) {
     const surfaceRadius = earthRadius * 1.014
-    const ringY = earthPos.y + Math.cos(AXIAL_TILT_RAD) * surfaceRadius
+    const ringY = earthPos.y + 1.16 * earthRadius
     const ringRadius = Math.sin(AXIAL_TILT_RAD) * surfaceRadius
+    const summer = getProgressForDate(year, 5, 21)
     const dayColor = isDark ? '#e9d5ff' : theme === 'sepia' ? '#6b21a8' : '#4f46a5'
     const nightColor = isDark ? '#6b5c87' : theme === 'sepia' ? '#8b7aa5' : '#818cf8'
     const dawnColor = isDark ? '#fbbf24' : '#f59e0b'
@@ -551,14 +554,15 @@ function NorthPoleYearPathRing({
         const night: THREE.Vector3[][] = []
         const markers: Array<{ point: THREE.Vector3; kind: 'dawn' | 'dusk' }> = []
         const steps = 240
-        const light = sunDirection.clone().normalize()
+        const light = new THREE.Vector3(Math.cos(sunAnchorAngle), 0, -Math.sin(sunAnchorAngle)).normalize()
         let current: THREE.Vector3[] = []
         let currentIsDay = false
         let previousPoint: THREE.Vector3 | undefined
         let previousDot = 0
 
         const pointAt = (index: number) => {
-            const angle = (index / steps) * Math.PI * 2
+            const progress = index / steps
+            const angle = sunAnchorAngle - (progress - summer) * Math.PI * 2
             const point = new THREE.Vector3(
                 earthPos.x + Math.cos(angle) * ringRadius,
                 ringY,
@@ -578,7 +582,7 @@ function NorthPoleYearPathRing({
             } else if (isDay !== currentIsDay && previousPoint) {
                 const t = Math.abs(previousDot) / (Math.abs(previousDot) + Math.abs(dot))
                 const crossing = previousPoint.clone().lerp(point, Number.isFinite(t) ? t : 0.5)
-                markers.push({ point: crossing, kind: isDay ? 'dawn' : 'dusk' })
+                markers.push({ point: crossing, kind: isDay ? 'dusk' : 'dawn' })
                 current.push(crossing)
                 if (current.length > 1) (currentIsDay ? day : night).push(current)
                 current = [crossing, point]
@@ -593,7 +597,7 @@ function NorthPoleYearPathRing({
 
         if (current.length > 1) (currentIsDay ? day : night).push(current)
         return { daySegments: day, nightSegments: night, transitions: markers }
-    }, [earthPos, ringRadius, ringY, sunDirection])
+    }, [earthPos, ringRadius, ringY, summer, sunAnchorAngle])
 
     return (
         <group>
@@ -848,6 +852,58 @@ function OrbitAnnotations({ isDark, theme, progress }: { isDark: boolean; theme:
                     </Text>
                 </group>
             ))}
+        </group>
+    )
+}
+
+function OrbitTiltNorthSouthRing({ isDark, theme, year }: { isDark: boolean; theme: ThemeMode; year: number }) {
+    const height = 1.05
+    const segmentCount = 192
+    const ringColor = isDark ? '#67e8f9' : theme === 'sepia' ? '#0e7490' : '#0284c7'
+    const edgeColor = isDark ? '#a5f3fc' : theme === 'sepia' ? '#155e75' : '#0369a1'
+    const { geometry, northEdge, southEdge } = useMemo(() => {
+        const northSouth = new THREE.Vector3(0, 1, 0)
+            .applyQuaternion(makeEarthTiltQuaternion(year))
+            .normalize()
+            .multiplyScalar(height / 2)
+        const vertices: number[] = []
+        const indices: number[] = []
+        const north: THREE.Vector3[] = []
+        const south: THREE.Vector3[] = []
+
+        for (let i = 0; i <= segmentCount; i++) {
+            const base = orbitPoint(i / segmentCount)
+            const northPoint = base.clone().add(northSouth)
+            const southPoint = base.clone().sub(northSouth)
+            north.push(northPoint)
+            south.push(southPoint)
+            vertices.push(northPoint.x, northPoint.y, northPoint.z, southPoint.x, southPoint.y, southPoint.z)
+
+            if (i < segmentCount) {
+                const topA = i * 2
+                const bottomA = topA + 1
+                const topB = topA + 2
+                const bottomB = topA + 3
+                indices.push(topA, bottomA, topB, bottomA, bottomB, topB)
+            }
+        }
+
+        const strip = new THREE.BufferGeometry()
+        strip.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
+        strip.setIndex(indices)
+        strip.computeVertexNormals()
+
+        return { geometry: strip, northEdge: north, southEdge: south }
+    }, [height, year])
+
+    return (
+        <group>
+            <mesh renderOrder={-1}>
+                <primitive object={geometry} attach="geometry" />
+                <meshBasicMaterial color={ringColor} transparent opacity={isDark ? 0.1 : 0.085} side={THREE.DoubleSide} depthWrite={false} />
+            </mesh>
+            <Line points={northEdge} color={edgeColor} lineWidth={0.85} transparent opacity={isDark ? 0.42 : 0.32} depthWrite={false} />
+            <Line points={southEdge} color={edgeColor} lineWidth={0.85} transparent opacity={isDark ? 0.42 : 0.32} depthWrite={false} />
         </group>
     )
 }
@@ -1614,20 +1670,6 @@ function GlobeSeasonHalo({
             labelPos: center.clone().add(direction.clone().multiplyScalar(radius * 0.44)).add(new THREE.Vector3(0, 0.025, 0)),
         }
     }, [center, point, radius, summer])
-    const northVector = useMemo(() => {
-        const direction = current.clone().sub(center).setY(0).normalize()
-        const start = center.clone().add(direction.clone().multiplyScalar(radius * 0.12))
-        const tip = center.clone().add(direction.clone().multiplyScalar(radius * 0.78))
-        const coneHeight = 0.045
-        return {
-            start,
-            tip,
-            coneCenter: tip.clone().sub(direction.clone().multiplyScalar(coneHeight / 2)),
-            coneHeight,
-            coneQuaternion: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction),
-            labelPos: center.clone().add(direction.clone().multiplyScalar(radius * 0.52)).add(new THREE.Vector3(0, 0.027, 0)),
-        }
-    }, [center, current, radius])
     const northMotionArrow = useMemo(() => {
         const start = current.clone()
         const direction = point(progress + 0.018, radius).sub(point(progress - 0.018, radius)).normalize()
@@ -1642,7 +1684,7 @@ function GlobeSeasonHalo({
         }
     }, [current, point, progress, radius])
     const sunVectorColor = isDark ? '#fbbf24' : '#d97706'
-    const northVectorColor = isDark ? '#d8b4fe' : '#4f46e5'
+    const currentMarkerColor = isDark ? '#d8b4fe' : '#4f46e5'
     const hourColor = isDark ? '#67e8f9' : '#0284c7'
     const hourTextColor = isDark ? '#a5f3fc' : '#0369a1'
     const localHourColor = isDark ? '#fdba74' : '#ea580c'
@@ -1745,16 +1787,6 @@ function GlobeSeasonHalo({
                     Sun
                 </Text>
             </Billboard>
-            <Line points={[northVector.start, northVector.tip]} color={northVectorColor} lineWidth={1.6} transparent opacity={isDark ? 0.9 : 0.78} depthTest />
-            <mesh position={northVector.coneCenter} quaternion={northVector.coneQuaternion}>
-                <coneGeometry args={[0.017, northVector.coneHeight, 16]} />
-                <meshBasicMaterial color={northVectorColor} transparent opacity={isDark ? 0.95 : 0.88} depthTest />
-            </mesh>
-            <Billboard position={northVector.labelPos}>
-                <Text fontSize={0.022} color={northVectorColor} anchorX="center" anchorY="middle" outlineWidth={0.002} outlineColor={outline}>
-                    North
-                </Text>
-            </Billboard>
             {[
                 { points: arc(0, spring), color: '#38bdf8' },
                 { points: arc(spring, summer), color: '#22c55e' },
@@ -1812,15 +1844,15 @@ function GlobeSeasonHalo({
             })}
             <mesh position={current}>
                 <sphereGeometry args={[0.018, 16, 16]} />
-                <meshBasicMaterial color={northVectorColor} transparent opacity={0.98} depthTest />
+                <meshBasicMaterial color={currentMarkerColor} transparent opacity={0.98} depthTest />
             </mesh>
-            <Line points={[northMotionArrow.start, northMotionArrow.tip]} color={northVectorColor} lineWidth={1.45} transparent opacity={isDark ? 0.9 : 0.78} depthTest />
+            <Line points={[northMotionArrow.start, northMotionArrow.tip]} color={currentMarkerColor} lineWidth={1.45} transparent opacity={isDark ? 0.9 : 0.78} depthTest />
             <mesh position={northMotionArrow.coneCenter} quaternion={northMotionArrow.coneQuaternion}>
                 <coneGeometry args={[0.013, northMotionArrow.coneHeight, 14]} />
-                <meshBasicMaterial color={northVectorColor} transparent opacity={isDark ? 0.96 : 0.88} depthTest />
+                <meshBasicMaterial color={currentMarkerColor} transparent opacity={isDark ? 0.96 : 0.88} depthTest />
             </mesh>
-            <Billboard position={center.clone().add(new THREE.Vector3(0, 0.018, 0))}>
-                <Text fontSize={0.04} color="#ffffff" anchorX="center" anchorY="middle" outlineWidth={0.003} outlineColor="#000000">
+            <Billboard position={current.clone().add(new THREE.Vector3(0, 0.052, 0))}>
+                <Text fontSize={0.035} color="#ffffff" anchorX="center" anchorY="bottom" outlineWidth={0.003} outlineColor="#000000">
                     {dateLabel}
                 </Text>
             </Billboard>
@@ -1856,7 +1888,6 @@ function UnifiedScene({
     const rotationDate = useMemo(() => new Date(Date.now() + rotationOffsetMs), [rotationOffsetMs])
     const progress = getOrbitalProgress(sceneDate)
     const rotationProgress = getOrbitalProgress(rotationDate)
-    const globeSunDirection = useMemo(() => getSunDirectionFromEarth(progress), [progress])
     const sunAnchorAngle = useMemo(() => getSunAnchoredHaloAngle(), [])
     const globeNorthDirection = useMemo(() => getSunAnchoredNorthDirection(sceneDate, sunAnchorAngle), [sceneDate, sunAnchorAngle])
     const yearProgress = progress
@@ -1928,6 +1959,7 @@ function UnifiedScene({
             <group quaternion={orbitViewQuaternion}>
                 <pointLight position={sunPos.toArray()} intensity={mode === 'globe' ? 0 : isDark ? 2.5 : 2} color={isDark || theme === 'sepia' ? '#fde68a' : '#fff4c2'} distance={16} decay={1.4} />
                 {mode === 'globe' && <GlobeSeasonHalo isDark={isDark} theme={theme} dateOffsetMs={dateOffsetMs} rotationOffsetMs={rotationOffsetMs} dateTextColor={dateTextColor} timezone={timezone} timezoneRingScale={timezoneRingScale} northDirection={globeNorthDirection} />}
+                {mode === 'orbit' && orbitTiltView && <OrbitTiltNorthSouthRing isDark={isDark} theme={theme} year={sceneDate.getFullYear()} />}
                 {mode === 'orbit' && <OrbitAnnotations isDark={isDark} theme={theme} progress={progress} />}
                 {mode === 'spiral' && <SpiralAnnotations isDark={isDark} theme={theme} />}
                 {mode === 'galaxy' && <GalaxyHistoryModel isDark={isDark} theme={theme} />}
@@ -1953,7 +1985,7 @@ function UnifiedScene({
                     />
                 )}
                 {mode !== 'galaxy' && <EarthBody mode={mode} position={earthPos} radius={earthRadius} isDark={isDark} theme={theme} progress={progress} sceneDate={sceneDate} rotationDate={rotationDate} rotationProgress={rotationProgress} northDirection={mode === 'globe' ? globeNorthDirection : undefined} homeCoords={homeCoords} />}
-                {mode === 'globe' && <NorthPoleYearPathRing earthPos={earthPos} earthRadius={earthRadius} sunDirection={globeSunDirection} isDark={isDark} theme={theme} />}
+                {mode === 'globe' && <NorthPoleYearPathRing earthPos={earthPos} earthRadius={earthRadius} year={sceneDate.getFullYear()} sunAnchorAngle={sunAnchorAngle} isDark={isDark} theme={theme} />}
                 {mode === 'spiral' && (
                     <Text position={[earthPos.x, earthPos.y + earthRadius + 0.18, earthPos.z]} fontSize={0.11} color={isDark || theme === 'sepia' ? '#60a5fa' : '#3f8fe8'} anchorX="center" anchorY="bottom" outlineWidth={0.004} outlineColor={isDark ? '#0f172a' : '#ffffff'}>
                         NOW

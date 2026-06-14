@@ -1575,7 +1575,7 @@ function GlobeSeasonHalo({
         axis.y = Math.cos(AXIAL_TILT_RAD)
         return axis.normalize()
     }, [northDirection])
-    const hourCenter = useMemo(() => northAxis.clone().multiplyScalar(1.3), [northAxis])
+    const hourCenter = useMemo(() => northAxis.clone().multiplyScalar(1.024), [northAxis])
     const timezoneCenter = useMemo(() => northAxis.clone().multiplyScalar(1.024), [northAxis])
     const hourDiskQuaternion = useMemo(() => new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), northAxis), [northAxis])
     const spring = getProgressForDate(year, 2, 20)

@@ -679,6 +679,7 @@ function EarthBody({
     rotationDate,
     rotationProgress,
     sunOrbitProgress,
+    sunOrbitActive,
     northDirection,
     homeCoords,
 }: {
@@ -692,6 +693,7 @@ function EarthBody({
     rotationDate: Date
     rotationProgress: number
     sunOrbitProgress: number
+    sunOrbitActive: boolean
     northDirection?: THREE.Vector3
     homeCoords?: EarthCoords
 }) {
@@ -708,12 +710,14 @@ function EarthBody({
             ? makeEarthTiltQuaternionForNorthDirection(northDirection)
             : makeEarthTiltQuaternion(year)
     ), [northDirection, year])
-    const sunDirection = useMemo(() => getSunDirectionFromEarth(progress), [progress])
+    const shaderBaseSunDirection = useRef(getSunDirectionFromEarth(progress))
     const shaderSunDirection = useMemo(() => (
-        rotateEclipticVector(sunDirection, sunOrbitProgress)
+        (sunOrbitActive
+            ? rotateEclipticVector(shaderBaseSunDirection.current, sunOrbitProgress)
+            : shaderBaseSunDirection.current.clone())
             .applyQuaternion(tiltQuaternion.clone().invert())
             .normalize()
-    ), [sunDirection, sunOrbitProgress, tiltQuaternion])
+    ), [sunOrbitActive, sunOrbitProgress, tiltQuaternion])
     const spinSunDirection = useMemo(() => getSunDirectionFromEarth(rotationProgress), [rotationProgress])
 
     useEffect(() => {
@@ -2127,7 +2131,7 @@ function UnifiedScene({
                         gapSize={0.06}
                     />
                 )}
-                {mode !== 'galaxy' && <EarthBody mode={mode} position={earthPos} radius={earthRadius} isDark={isDark} theme={theme} progress={progress} sceneDate={sceneDate} rotationDate={rotationDate} rotationProgress={rotationProgress} sunOrbitProgress={mode === 'globe' ? sunOrbitProgress : 0} northDirection={mode === 'globe' ? globeNorthDirection : undefined} homeCoords={homeCoords} />}
+                {mode !== 'galaxy' && <EarthBody mode={mode} position={earthPos} radius={earthRadius} isDark={isDark} theme={theme} progress={progress} sceneDate={sceneDate} rotationDate={rotationDate} rotationProgress={rotationProgress} sunOrbitProgress={mode === 'globe' ? sunOrbitProgress : 0} sunOrbitActive={mode === 'globe' && sunOrbitActive} northDirection={mode === 'globe' ? globeNorthDirection : undefined} homeCoords={homeCoords} />}
                 {mode === 'globe' && (
                     <group quaternion={sunOrbitQuaternion}>
                         <NorthPoleYearPathRing earthPos={earthPos} earthRadius={earthRadius} year={sceneDate.getFullYear()} sunAnchorAngle={sunAnchorAngle} isDark={isDark} theme={theme} />

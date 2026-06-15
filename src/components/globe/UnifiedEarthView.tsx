@@ -908,38 +908,21 @@ function makeOrbitCylinderStrip(axis: THREE.Vector3, height: number, segmentCoun
     return { geometry, positiveEdge, negativeEdge }
 }
 
-function OrbitTiltReferenceRings({ isDark, theme, year }: { isDark: boolean; theme: ThemeMode; year: number }) {
+function OrbitTiltReferenceRings({ isDark, theme }: { isDark: boolean; theme: ThemeMode }) {
     const height = 1.05
     const segmentCount = 192
-    const northRingColor = isDark ? '#67e8f9' : theme === 'sepia' ? '#0e7490' : '#0284c7'
-    const northEdgeColor = isDark ? '#a5f3fc' : theme === 'sepia' ? '#155e75' : '#0369a1'
     const eclipticRingColor = isDark ? '#fbbf24' : theme === 'sepia' ? '#b45309' : '#d97706'
     const eclipticEdgeColor = isDark ? '#fde68a' : theme === 'sepia' ? '#92400e' : '#b45309'
-    const { northSouthRing, eclipticNormalRing } = useMemo(() => {
-        const tiltedNorthAxis = new THREE.Vector3(0, 1, 0)
-            .applyQuaternion(makeEarthTiltQuaternion(year))
-            .normalize()
-
-        return {
-            northSouthRing: makeOrbitCylinderStrip(tiltedNorthAxis, height / Math.abs(tiltedNorthAxis.y), segmentCount),
-            eclipticNormalRing: makeOrbitCylinderStrip(ECLIPTIC_NORTH, height, segmentCount),
-        }
-    }, [height, year])
+    const eclipticNormalRing = useMemo(() => makeOrbitCylinderStrip(ECLIPTIC_NORTH, height, segmentCount), [height])
 
     return (
         <group>
             <mesh renderOrder={-2}>
                 <primitive object={eclipticNormalRing.geometry} attach="geometry" />
-                <meshBasicMaterial color={eclipticRingColor} side={THREE.DoubleSide} depthWrite depthTest />
+                <meshBasicMaterial color={eclipticRingColor} transparent opacity={0.3} side={THREE.DoubleSide} depthWrite={false} depthTest />
             </mesh>
-            <Line points={eclipticNormalRing.positiveEdge} color={eclipticEdgeColor} lineWidth={0.72} transparent opacity={isDark ? 0.34 : 0.26} depthWrite depthTest />
-            <Line points={eclipticNormalRing.negativeEdge} color={eclipticEdgeColor} lineWidth={0.72} transparent opacity={isDark ? 0.34 : 0.26} depthWrite depthTest />
-            <mesh renderOrder={-1}>
-                <primitive object={northSouthRing.geometry} attach="geometry" />
-                <meshBasicMaterial color={northRingColor} side={THREE.DoubleSide} depthWrite depthTest />
-            </mesh>
-            <Line points={northSouthRing.positiveEdge} color={northEdgeColor} lineWidth={0.85} transparent opacity={isDark ? 0.42 : 0.32} depthWrite depthTest />
-            <Line points={northSouthRing.negativeEdge} color={northEdgeColor} lineWidth={0.85} transparent opacity={isDark ? 0.42 : 0.32} depthWrite depthTest />
+            <Line points={eclipticNormalRing.positiveEdge} color={eclipticEdgeColor} lineWidth={0.72} transparent opacity={isDark ? 0.34 : 0.26} depthWrite={false} depthTest />
+            <Line points={eclipticNormalRing.negativeEdge} color={eclipticEdgeColor} lineWidth={0.72} transparent opacity={isDark ? 0.34 : 0.26} depthWrite={false} depthTest />
         </group>
     )
 }
@@ -2024,7 +2007,7 @@ function UnifiedScene({
             <group quaternion={orbitViewQuaternion}>
                 <pointLight position={sunPos.toArray()} intensity={mode === 'globe' ? 0 : isDark ? 2.5 : 2} color={isDark || theme === 'sepia' ? '#fde68a' : '#fff4c2'} distance={16} decay={1.4} />
                 {mode === 'globe' && <GlobeSeasonHalo isDark={isDark} theme={theme} dateOffsetMs={dateOffsetMs} rotationOffsetMs={rotationOffsetMs} dateTextColor={dateTextColor} timezone={timezone} timezoneRingScale={timezoneRingScale} northDirection={globeNorthDirection} />}
-                {mode === 'orbit' && orbitTiltStripsVisible && <OrbitTiltReferenceRings isDark={isDark} theme={theme} year={sceneDate.getFullYear()} />}
+                {mode === 'orbit' && orbitTiltStripsVisible && <OrbitTiltReferenceRings isDark={isDark} theme={theme} />}
                 {mode === 'orbit' && <OrbitAnnotations isDark={isDark} theme={theme} progress={progress} />}
                 {mode === 'spiral' && <SpiralAnnotations isDark={isDark} theme={theme} />}
                 {mode === 'galaxy' && <GalaxyHistoryModel isDark={isDark} theme={theme} />}

@@ -1676,6 +1676,19 @@ function GlobeSeasonHalo({
     const outline = isDark ? '#0f172a' : '#ffffff'
     const monthTextColor = isDark ? '#c4b5fd' : theme === 'sepia' ? '#6d28d9' : '#6868b8'
     const current = point(progress)
+    const northVectorArrow = useMemo(() => {
+        const direction = current.clone().sub(center).normalize()
+        const start = center.clone().add(direction.clone().multiplyScalar(radius * 0.1))
+        const tip = center.clone().add(direction.clone().multiplyScalar(radius * 0.74))
+        const coneHeight = 0.038
+        return {
+            start,
+            tip,
+            coneCenter: tip.clone().sub(direction.clone().multiplyScalar(coneHeight / 2)),
+            coneHeight,
+            coneQuaternion: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction),
+        }
+    }, [center, current, radius])
     const sunVector = useMemo(() => {
         const direction = point(summer, 1).sub(center).setY(0).normalize()
         const start = center.clone().add(direction.clone().multiplyScalar(radius * 0.12))
@@ -1891,6 +1904,11 @@ function GlobeSeasonHalo({
             <mesh position={current}>
                 <sphereGeometry args={[0.018, 16, 16]} />
                 <meshBasicMaterial color={currentMarkerColor} transparent opacity={0.98} depthTest />
+            </mesh>
+            <Line points={[northVectorArrow.start, northVectorArrow.tip]} color={currentMarkerColor} lineWidth={1.25} transparent opacity={isDark ? 0.78 : 0.64} depthTest />
+            <mesh position={northVectorArrow.coneCenter} quaternion={northVectorArrow.coneQuaternion}>
+                <coneGeometry args={[0.012, northVectorArrow.coneHeight, 14]} />
+                <meshBasicMaterial color={currentMarkerColor} transparent opacity={isDark ? 0.9 : 0.78} depthTest />
             </mesh>
             <Line points={[northMotionArrow.start, northMotionArrow.tip]} color={currentMarkerColor} lineWidth={1.45} transparent opacity={isDark ? 0.9 : 0.78} depthTest />
             <mesh position={northMotionArrow.coneCenter} quaternion={northMotionArrow.coneQuaternion}>

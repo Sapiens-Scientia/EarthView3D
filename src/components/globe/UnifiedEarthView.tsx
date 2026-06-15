@@ -1638,7 +1638,7 @@ function GlobeSeasonHalo({
         new Date(baseNow.getTime() + (sunOrbitActive ? sunOrbitProgress * DISPLAY_YEAR_MS : dateOffsetMs))
     ), [baseNow, dateOffsetMs, sunOrbitActive, sunOrbitProgress])
     const displayTimeNow = useMemo(() => (
-        new Date(baseNow.getTime() + (sunOrbitActive ? sunOrbitProgress * DAY_MS : rotationOffsetMs))
+        new Date(baseNow.getTime() + (sunOrbitActive ? -sunOrbitProgress * DAY_MS : rotationOffsetMs))
     ), [baseNow, rotationOffsetMs, sunOrbitActive, sunOrbitProgress])
     const year = now.getFullYear()
     const progress = getOrbitalProgress(now)

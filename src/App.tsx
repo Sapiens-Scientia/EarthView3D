@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Axis3d, Calendar, CalendarClock, Clock3, Globe2, Layers2, Moon, Orbit, Pause, RotateCcw, Sparkles, Sun, Waves } from 'lucide-react'
+import { Axis3d, Globe2, Layers2, Moon, Orbit, RotateCcw, Sparkles, Sun, Waves } from 'lucide-react'
 import { UnifiedEarthView, type EarthVisualizationMode } from './components/globe/UnifiedEarthView'
 import { useAppContext } from './contexts'
 
@@ -183,33 +183,33 @@ export default function App() {
               <>
                 <button
                   type="button"
-                  className={`earth-icon-button ${previewMode === 'day' ? 'is-active' : ''}`}
+                  className={`earth-action-button earth-animation-button ${previewMode === 'day' ? 'is-active' : ''}`}
                   onClick={() => togglePreview('day')}
                   aria-pressed={previewMode === 'day'}
                   aria-label={previewMode === 'day' ? 'Stop 24-hour animation' : 'Animate 24 hours'}
                   title={previewMode === 'day' ? 'Stop 24-hour animation' : 'Animate 24 hours'}
                 >
-                  {previewMode === 'day' ? <Pause aria-hidden="true" /> : <Clock3 aria-hidden="true" />}
+                  <span>{previewMode === 'day' ? 'Stop 24h' : '24 Hours'}</span>
                 </button>
                 <button
                   type="button"
-                  className={`earth-icon-button ${previewMode === 'year-no-spin' ? 'is-active' : ''}`}
+                  className={`earth-action-button earth-animation-button ${previewMode === 'year-no-spin' ? 'is-active' : ''}`}
                   onClick={() => togglePreview('year-no-spin')}
                   aria-pressed={previewMode === 'year-no-spin'}
                   aria-label={previewMode === 'year-no-spin' ? 'Stop 1-year animation without Earth rotation' : 'Animate 1 year without Earth rotation'}
                   title={previewMode === 'year-no-spin' ? 'Stop 1-year animation without Earth rotation' : 'Animate 1 year without Earth rotation'}
                 >
-                  {previewMode === 'year-no-spin' ? <Pause aria-hidden="true" /> : <Calendar aria-hidden="true" />}
+                  <span>{previewMode === 'year-no-spin' ? 'Stop Year' : '1 Year'}</span>
                 </button>
                 <button
                   type="button"
-                  className={`earth-icon-button ${previewMode === 'year-spin' ? 'is-active' : ''}`}
+                  className={`earth-action-button earth-animation-button ${previewMode === 'year-spin' ? 'is-active' : ''}`}
                   onClick={() => togglePreview('year-spin')}
                   aria-pressed={previewMode === 'year-spin'}
                   aria-label={previewMode === 'year-spin' ? 'Stop 1-year animation with daily rotations' : 'Animate 1 year with daily rotations'}
                   title={previewMode === 'year-spin' ? 'Stop 1-year animation with daily rotations' : 'Animate 1 year with daily rotations'}
                 >
-                  {previewMode === 'year-spin' ? <Pause aria-hidden="true" /> : <CalendarClock aria-hidden="true" />}
+                  <span>{previewMode === 'year-spin' ? 'Stop Spin' : 'Year + Spin'}</span>
                 </button>
               </>
             )}

@@ -173,6 +173,10 @@ button {
   height: 17px;
 }
 
+.earth-animation-button {
+  min-width: 84px;
+}
+
 .earth-theme-button {
   min-width: 72px;
   height: 38px;
@@ -279,6 +283,11 @@ button {
     gap: 5px;
     padding: 0 9px;
     font-size: 11px;
+  }
+
+  .earth-animation-button {
+    min-width: 72px;
+    padding: 0 8px;
   }
 
   .earth-theme-button {

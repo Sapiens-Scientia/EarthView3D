@@ -16,6 +16,8 @@ interface EarthCoords {
 const AXIAL_TILT_DEG = 23.44
 const AXIAL_TILT_RAD = (AXIAL_TILT_DEG * Math.PI) / 180
 const ECLIPTIC_NORTH = new THREE.Vector3(0, 1, 0)
+const DAY_MS = 24 * 60 * 60 * 1000
+const DISPLAY_YEAR_MS = 365 * DAY_MS
 const ORBIT_RADIUS = 2.2
 const SPIRAL_RADIUS = 1.8
 const SPIRAL_TURNS = 10
@@ -1632,12 +1634,18 @@ function GlobeSeasonHalo({
     const [baseNow, setBaseNow] = useState(() => new Date())
     const now = useMemo(() => new Date(baseNow.getTime() + dateOffsetMs), [baseNow, dateOffsetMs])
     const ringNow = useMemo(() => new Date(baseNow.getTime() + rotationOffsetMs), [baseNow, rotationOffsetMs])
+    const displayDateNow = useMemo(() => (
+        new Date(baseNow.getTime() + (sunOrbitActive ? sunOrbitProgress * DISPLAY_YEAR_MS : dateOffsetMs))
+    ), [baseNow, dateOffsetMs, sunOrbitActive, sunOrbitProgress])
+    const displayTimeNow = useMemo(() => (
+        new Date(baseNow.getTime() + (sunOrbitActive ? sunOrbitProgress * DAY_MS : rotationOffsetMs))
+    ), [baseNow, rotationOffsetMs, sunOrbitActive, sunOrbitProgress])
     const year = now.getFullYear()
     const progress = getOrbitalProgress(now)
     const ringProgress = getOrbitalProgress(ringNow)
-    const easternTimeLabel = useMemo(() => formatNowMarkerTime(ringNow, EASTERN_TIMEZONE), [ringNow])
+    const easternTimeLabel = useMemo(() => formatNowMarkerTime(displayTimeNow, EASTERN_TIMEZONE), [displayTimeNow])
     const easternTimeParts = useMemo(() => getTimePartsInTimezone(ringNow, EASTERN_TIMEZONE), [ringNow])
-    const dateLabel = useMemo(() => formatSeasonHaloDate(now), [now])
+    const dateLabel = useMemo(() => formatSeasonHaloDate(displayDateNow), [displayDateNow])
     const center = new THREE.Vector3(0, 1.16, 0)
     const radius = Math.tan(AXIAL_TILT_RAD) * center.y
     const hourRadius = radius * 0.6
@@ -1707,12 +1715,15 @@ function GlobeSeasonHalo({
         }
         return pts
     }, [point])
-    const hourPoint = useCallback((hourProgress: number, r = hourRadius) => {
-        const angle = hourProgress * Math.PI * 2 + sunOrbitAngle
+    const baseHourPoint = useCallback((hourProgress: number, r = hourRadius) => {
+        const angle = hourProgress * Math.PI * 2
         return hourCenter.clone()
             .add(hourBasis.u.clone().multiplyScalar(Math.cos(angle) * r))
             .add(hourBasis.v.clone().multiplyScalar(Math.sin(angle) * r))
-    }, [hourBasis, hourCenter, hourRadius, sunOrbitAngle])
+    }, [hourBasis, hourCenter, hourRadius])
+    const hourPoint = useCallback((hourProgress: number, r = hourRadius) => {
+        return baseHourPoint(hourProgress + sunOrbitProgress, r)
+    }, [baseHourPoint, sunOrbitProgress])
     const timezonePoint = useCallback((hourProgress: number, r = hourRadius) => {
         const angle = hourProgress * Math.PI * 2
         return timezoneCenter.clone()
@@ -1788,13 +1799,12 @@ function GlobeSeasonHalo({
     const timezoneUtcColor = isDark ? '#fef08a' : '#a16207'
     const timezoneLocalColor = isDark ? '#f0abfc' : '#a21caf'
     const easternHourProgress = (easternTimeParts.hour + easternTimeParts.minute / 60 + easternTimeParts.second / 3600) / 24
-    const currentTimePoint = sunOrbitActive ? timezonePoint : hourPoint
-    const easternHourMarkerPoint = currentTimePoint(easternHourProgress, hourRadius)
-    const easternHourLabelPoint = currentTimePoint(easternHourProgress, hourRadius + 0.09)
+    const easternHourMarkerPoint = baseHourPoint(easternHourProgress, hourRadius)
+    const easternHourLabelPoint = baseHourPoint(easternHourProgress, hourRadius + 0.09)
     const easternHourMotionArrow = useMemo(() => {
         const start = easternHourMarkerPoint.clone()
-        const direction = currentTimePoint(easternHourProgress + 0.018, hourRadius)
-            .sub(currentTimePoint(easternHourProgress - 0.018, hourRadius))
+        const direction = baseHourPoint(easternHourProgress + 0.018, hourRadius)
+            .sub(baseHourPoint(easternHourProgress - 0.018, hourRadius))
             .normalize()
         const tip = start.clone().add(direction.clone().multiplyScalar(0.074))
         const coneHeight = 0.028
@@ -1805,7 +1815,7 @@ function GlobeSeasonHalo({
             coneHeight,
             coneQuaternion: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction),
         }
-    }, [currentTimePoint, easternHourMarkerPoint, easternHourProgress, hourRadius])
+    }, [baseHourPoint, easternHourMarkerPoint, easternHourProgress, hourRadius])
 
     return (
         <group>

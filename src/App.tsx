@@ -8,7 +8,7 @@ const SCENE_DARK_KEY = 'earth-view-scene-dark'
 const DAY_MS = 24 * 60 * 60 * 1000
 const YEAR_MS = 365 * DAY_MS
 
-type PreviewMode = 'day' | 'year-no-spin' | 'year-spin'
+type PreviewMode = 'day' | 'year-no-spin' | 'year-spin' | 'sun-year'
 
 const MODES: Array<{
   id: EarthVisualizationMode
@@ -59,6 +59,7 @@ export default function App() {
   const [previewMode, setPreviewMode] = useState<PreviewMode | null>(null)
   const [dateOffsetMs, setDateOffsetMs] = useState(0)
   const [rotationOffsetMs, setRotationOffsetMs] = useState(0)
+  const [sunOrbitProgress, setSunOrbitProgress] = useState(0)
   const [orbitTiltView, setOrbitTiltView] = useState(false)
   const [orbitTiltStripsVisible, setOrbitTiltStripsVisible] = useState(true)
   const [resetViewKey, setResetViewKey] = useState(0)
@@ -83,21 +84,29 @@ export default function App() {
   useEffect(() => {
     if (!previewMode) return
 
-    const durationMs = previewMode === 'day' ? 16000 : previewMode === 'year-no-spin' ? 48000 : 96000
+    const durationMs = previewMode === 'day' ? 16000 : previewMode === 'year-spin' ? 96000 : 48000
     const start = performance.now()
     let frame = 0
 
     const animate = (time: number) => {
       const progress = Math.min(1, (time - start) / durationMs)
-      const offsetMs = previewMode === 'day' ? progress * DAY_MS : progress * YEAR_MS
-      setDateOffsetMs(offsetMs)
-      setRotationOffsetMs(previewMode === 'year-no-spin' ? 0 : offsetMs)
+      if (previewMode === 'sun-year') {
+        setDateOffsetMs(0)
+        setRotationOffsetMs(0)
+        setSunOrbitProgress(progress)
+      } else {
+        const offsetMs = previewMode === 'day' ? progress * DAY_MS : progress * YEAR_MS
+        setDateOffsetMs(offsetMs)
+        setRotationOffsetMs(previewMode === 'year-no-spin' ? 0 : offsetMs)
+        setSunOrbitProgress(0)
+      }
       if (progress < 1) {
         frame = requestAnimationFrame(animate)
       } else {
         setPreviewMode(null)
         setDateOffsetMs(0)
         setRotationOffsetMs(0)
+        setSunOrbitProgress(0)
       }
     }
 
@@ -110,11 +119,13 @@ export default function App() {
     setPreviewMode(null)
     setDateOffsetMs(0)
     setRotationOffsetMs(0)
+    setSunOrbitProgress(0)
   }, [mode])
 
   const togglePreview = (nextMode: PreviewMode) => {
     setDateOffsetMs(0)
     setRotationOffsetMs(0)
+    setSunOrbitProgress(0)
     setPreviewMode((current) => current === nextMode ? null : nextMode)
   }
 
@@ -129,6 +140,8 @@ export default function App() {
           mode={mode}
           dateOffsetMs={mode === 'globe' ? dateOffsetMs : 0}
           rotationOffsetMs={mode === 'globe' ? rotationOffsetMs : 0}
+          sunOrbitProgress={mode === 'globe' ? sunOrbitProgress : 0}
+          sunOrbitActive={mode === 'globe' && previewMode === 'sun-year'}
           isDarkOverride={effectiveSceneIsDark}
           orbitTiltView={orbitTiltView}
           orbitTiltStripsVisible={orbitTiltStripsVisible}
@@ -210,6 +223,16 @@ export default function App() {
                   title={previewMode === 'year-spin' ? 'Stop 1-year animation with daily rotations' : 'Animate 1 year with daily rotations'}
                 >
                   <span>{previewMode === 'year-spin' ? 'Stop Spin' : 'Year + Spin'}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`earth-action-button earth-animation-button ${previewMode === 'sun-year' ? 'is-active' : ''}`}
+                  onClick={() => togglePreview('sun-year')}
+                  aria-pressed={previewMode === 'sun-year'}
+                  aria-label={previewMode === 'sun-year' ? 'Stop sun direction year animation' : 'Animate sun direction through one year'}
+                  title={previewMode === 'sun-year' ? 'Stop sun direction year animation' : 'Animate sun direction through one year'}
+                >
+                  <span>{previewMode === 'sun-year' ? 'Stop Sun' : 'Sun Year'}</span>
                 </button>
               </>
             )}

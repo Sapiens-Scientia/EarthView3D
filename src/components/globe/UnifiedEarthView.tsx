@@ -876,54 +876,70 @@ function OrbitAnnotations({ isDark, theme, progress }: { isDark: boolean; theme:
     )
 }
 
-function OrbitTiltNorthSouthRing({ isDark, theme, year }: { isDark: boolean; theme: ThemeMode; year: number }) {
+function makeOrbitCylinderStrip(axis: THREE.Vector3, height: number, segmentCount: number) {
+    const offset = axis.clone().normalize().multiplyScalar(height / 2)
+    const vertices: number[] = []
+    const indices: number[] = []
+    const positiveEdge: THREE.Vector3[] = []
+    const negativeEdge: THREE.Vector3[] = []
+
+    for (let i = 0; i <= segmentCount; i++) {
+        const base = orbitPoint(i / segmentCount)
+        const positivePoint = base.clone().add(offset)
+        const negativePoint = base.clone().sub(offset)
+        positiveEdge.push(positivePoint)
+        negativeEdge.push(negativePoint)
+        vertices.push(positivePoint.x, positivePoint.y, positivePoint.z, negativePoint.x, negativePoint.y, negativePoint.z)
+
+        if (i < segmentCount) {
+            const topA = i * 2
+            const bottomA = topA + 1
+            const topB = topA + 2
+            const bottomB = topA + 3
+            indices.push(topA, bottomA, topB, bottomA, bottomB, topB)
+        }
+    }
+
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
+    geometry.setIndex(indices)
+    geometry.computeVertexNormals()
+
+    return { geometry, positiveEdge, negativeEdge }
+}
+
+function OrbitTiltReferenceRings({ isDark, theme, year }: { isDark: boolean; theme: ThemeMode; year: number }) {
     const height = 1.05
     const segmentCount = 192
-    const ringColor = isDark ? '#67e8f9' : theme === 'sepia' ? '#0e7490' : '#0284c7'
-    const edgeColor = isDark ? '#a5f3fc' : theme === 'sepia' ? '#155e75' : '#0369a1'
-    const { geometry, northEdge, southEdge } = useMemo(() => {
-        const northSouth = new THREE.Vector3(0, 1, 0)
+    const northRingColor = isDark ? '#67e8f9' : theme === 'sepia' ? '#0e7490' : '#0284c7'
+    const northEdgeColor = isDark ? '#a5f3fc' : theme === 'sepia' ? '#155e75' : '#0369a1'
+    const eclipticRingColor = isDark ? '#fbbf24' : theme === 'sepia' ? '#b45309' : '#d97706'
+    const eclipticEdgeColor = isDark ? '#fde68a' : theme === 'sepia' ? '#92400e' : '#b45309'
+    const { northSouthRing, eclipticNormalRing } = useMemo(() => {
+        const tiltedNorthAxis = new THREE.Vector3(0, 1, 0)
             .applyQuaternion(makeEarthTiltQuaternion(year))
             .normalize()
-            .multiplyScalar(height / 2)
-        const vertices: number[] = []
-        const indices: number[] = []
-        const north: THREE.Vector3[] = []
-        const south: THREE.Vector3[] = []
 
-        for (let i = 0; i <= segmentCount; i++) {
-            const base = orbitPoint(i / segmentCount)
-            const northPoint = base.clone().add(northSouth)
-            const southPoint = base.clone().sub(northSouth)
-            north.push(northPoint)
-            south.push(southPoint)
-            vertices.push(northPoint.x, northPoint.y, northPoint.z, southPoint.x, southPoint.y, southPoint.z)
-
-            if (i < segmentCount) {
-                const topA = i * 2
-                const bottomA = topA + 1
-                const topB = topA + 2
-                const bottomB = topA + 3
-                indices.push(topA, bottomA, topB, bottomA, bottomB, topB)
-            }
+        return {
+            northSouthRing: makeOrbitCylinderStrip(tiltedNorthAxis, height / Math.abs(tiltedNorthAxis.y), segmentCount),
+            eclipticNormalRing: makeOrbitCylinderStrip(ECLIPTIC_NORTH, height, segmentCount),
         }
-
-        const strip = new THREE.BufferGeometry()
-        strip.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
-        strip.setIndex(indices)
-        strip.computeVertexNormals()
-
-        return { geometry: strip, northEdge: north, southEdge: south }
     }, [height, year])
 
     return (
         <group>
-            <mesh renderOrder={-1}>
-                <primitive object={geometry} attach="geometry" />
-                <meshBasicMaterial color={ringColor} transparent opacity={isDark ? 0.1 : 0.085} side={THREE.DoubleSide} depthWrite={false} />
+            <mesh renderOrder={-2}>
+                <primitive object={eclipticNormalRing.geometry} attach="geometry" />
+                <meshBasicMaterial color={eclipticRingColor} side={THREE.DoubleSide} depthWrite depthTest />
             </mesh>
-            <Line points={northEdge} color={edgeColor} lineWidth={0.85} transparent opacity={isDark ? 0.42 : 0.32} depthWrite={false} />
-            <Line points={southEdge} color={edgeColor} lineWidth={0.85} transparent opacity={isDark ? 0.42 : 0.32} depthWrite={false} />
+            <Line points={eclipticNormalRing.positiveEdge} color={eclipticEdgeColor} lineWidth={0.72} transparent opacity={isDark ? 0.34 : 0.26} depthWrite depthTest />
+            <Line points={eclipticNormalRing.negativeEdge} color={eclipticEdgeColor} lineWidth={0.72} transparent opacity={isDark ? 0.34 : 0.26} depthWrite depthTest />
+            <mesh renderOrder={-1}>
+                <primitive object={northSouthRing.geometry} attach="geometry" />
+                <meshBasicMaterial color={northRingColor} side={THREE.DoubleSide} depthWrite depthTest />
+            </mesh>
+            <Line points={northSouthRing.positiveEdge} color={northEdgeColor} lineWidth={0.85} transparent opacity={isDark ? 0.42 : 0.32} depthWrite depthTest />
+            <Line points={northSouthRing.negativeEdge} color={northEdgeColor} lineWidth={0.85} transparent opacity={isDark ? 0.42 : 0.32} depthWrite depthTest />
         </group>
     )
 }
@@ -1917,6 +1933,7 @@ function UnifiedScene({
     timezone,
     timezoneRingScale,
     orbitTiltView,
+    orbitTiltStripsVisible,
     resetViewKey,
 }: {
     mode: EarthVisualizationMode
@@ -1928,6 +1945,7 @@ function UnifiedScene({
     timezone: string
     timezoneRingScale: number
     orbitTiltView: boolean
+    orbitTiltStripsVisible: boolean
     resetViewKey: number
 }) {
     const { camera } = useThree()
@@ -2006,7 +2024,7 @@ function UnifiedScene({
             <group quaternion={orbitViewQuaternion}>
                 <pointLight position={sunPos.toArray()} intensity={mode === 'globe' ? 0 : isDark ? 2.5 : 2} color={isDark || theme === 'sepia' ? '#fde68a' : '#fff4c2'} distance={16} decay={1.4} />
                 {mode === 'globe' && <GlobeSeasonHalo isDark={isDark} theme={theme} dateOffsetMs={dateOffsetMs} rotationOffsetMs={rotationOffsetMs} dateTextColor={dateTextColor} timezone={timezone} timezoneRingScale={timezoneRingScale} northDirection={globeNorthDirection} />}
-                {mode === 'orbit' && orbitTiltView && <OrbitTiltNorthSouthRing isDark={isDark} theme={theme} year={sceneDate.getFullYear()} />}
+                {mode === 'orbit' && orbitTiltStripsVisible && <OrbitTiltReferenceRings isDark={isDark} theme={theme} year={sceneDate.getFullYear()} />}
                 {mode === 'orbit' && <OrbitAnnotations isDark={isDark} theme={theme} progress={progress} />}
                 {mode === 'spiral' && <SpiralAnnotations isDark={isDark} theme={theme} />}
                 {mode === 'galaxy' && <GalaxyHistoryModel isDark={isDark} theme={theme} />}
@@ -2075,13 +2093,14 @@ interface UnifiedEarthViewProps {
     rotationOffsetMs?: number
     isDarkOverride?: boolean
     orbitTiltView?: boolean
+    orbitTiltStripsVisible?: boolean
     resetViewKey?: number
     homeCoords?: EarthCoords
     timezone: string
     timezoneRingScale?: number
 }
 
-export function UnifiedEarthView({ className, style, mode, dateOffsetMs = 0, rotationOffsetMs = 0, isDarkOverride, orbitTiltView = false, resetViewKey = 0, homeCoords, timezone, timezoneRingScale = 1 }: UnifiedEarthViewProps) {
+export function UnifiedEarthView({ className, style, mode, dateOffsetMs = 0, rotationOffsetMs = 0, isDarkOverride, orbitTiltView = false, orbitTiltStripsVisible = true, resetViewKey = 0, homeCoords, timezone, timezoneRingScale = 1 }: UnifiedEarthViewProps) {
     const { isDark, theme } = useAppContext()
     const [ready, setReady] = useState(false)
     const [contextResetKey, setContextResetKey] = useState(0)
@@ -2118,7 +2137,7 @@ export function UnifiedEarthView({ className, style, mode, dateOffsetMs = 0, rot
                 }}
             >
                 <SceneBackground color={bgColor} />
-                <UnifiedScene mode={mode} isDark={sceneIsDark} theme={theme} dateOffsetMs={dateOffsetMs} rotationOffsetMs={rotationOffsetMs} homeCoords={homeCoords} timezone={timezone} timezoneRingScale={timezoneRingScale} orbitTiltView={orbitTiltView} resetViewKey={resetViewKey} />
+                <UnifiedScene mode={mode} isDark={sceneIsDark} theme={theme} dateOffsetMs={dateOffsetMs} rotationOffsetMs={rotationOffsetMs} homeCoords={homeCoords} timezone={timezone} timezoneRingScale={timezoneRingScale} orbitTiltView={orbitTiltView} orbitTiltStripsVisible={orbitTiltStripsVisible} resetViewKey={resetViewKey} />
             </Canvas>
         </div>
     )

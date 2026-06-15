@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Axis3d, Calendar, CalendarClock, Clock3, Globe2, Moon, Orbit, Pause, RotateCcw, Sparkles, Sun, Waves } from 'lucide-react'
+import { Axis3d, Calendar, CalendarClock, Clock3, Globe2, Layers2, Moon, Orbit, Pause, RotateCcw, Sparkles, Sun, Waves } from 'lucide-react'
 import { UnifiedEarthView, type EarthVisualizationMode } from './components/globe/UnifiedEarthView'
 import { useAppContext } from './contexts'
 
@@ -60,6 +60,7 @@ export default function App() {
   const [dateOffsetMs, setDateOffsetMs] = useState(0)
   const [rotationOffsetMs, setRotationOffsetMs] = useState(0)
   const [orbitTiltView, setOrbitTiltView] = useState(false)
+  const [orbitTiltStripsVisible, setOrbitTiltStripsVisible] = useState(true)
   const [resetViewKey, setResetViewKey] = useState(0)
   const timezone = useMemo(getBrowserTimezone, [])
 
@@ -130,6 +131,7 @@ export default function App() {
           rotationOffsetMs={mode === 'globe' ? rotationOffsetMs : 0}
           isDarkOverride={effectiveSceneIsDark}
           orbitTiltView={orbitTiltView}
+          orbitTiltStripsVisible={orbitTiltStripsVisible}
           resetViewKey={resetViewKey}
           timezone={timezone}
           timezoneRingScale={0.72}
@@ -162,6 +164,19 @@ export default function App() {
               >
                 <Axis3d aria-hidden="true" />
                 <span>Tilt View</span>
+              </button>
+            )}
+            {mode === 'orbit' && (
+              <button
+                type="button"
+                className={`earth-action-button ${orbitTiltStripsVisible ? 'is-active' : ''}`}
+                onClick={() => setOrbitTiltStripsVisible((value) => !value)}
+                aria-pressed={orbitTiltStripsVisible}
+                aria-label={orbitTiltStripsVisible ? 'Hide tilt reference strips' : 'Show tilt reference strips'}
+                title={orbitTiltStripsVisible ? 'Hide tilt reference strips' : 'Show tilt reference strips'}
+              >
+                <Layers2 aria-hidden="true" />
+                <span>Strips</span>
               </button>
             )}
             {mode === 'globe' && (

@@ -382,7 +382,7 @@ function Stars({ isDark, theme }: { isDark: boolean; theme: ThemeMode }) {
     )
 }
 
-function EarthTexture({ isDark, theme }: { isDark: boolean; theme: ThemeMode }) {
+function EarthTexture({ isDark, theme, rotationOffset = 0 }: { isDark: boolean; theme: ThemeMode; rotationOffset?: number }) {
     const surfaceTexture = useLoader(THREE.TextureLoader, '/earth-blue-marble-5400x2700.jpg')
 
     const displayTexture = useMemo(() => {
@@ -433,7 +433,7 @@ function EarthTexture({ isDark, theme }: { isDark: boolean; theme: ThemeMode }) 
     }, [surfaceTexture, isDark, theme])
 
     return (
-        <mesh>
+        <mesh rotation={[0, rotationOffset, 0]}>
             <sphereGeometry args={[1, 64, 64]} />
             <meshBasicMaterial map={displayTexture} toneMapped={false} color="#ffffff" />
         </mesh>
@@ -718,6 +718,7 @@ function EarthBody({
             .applyQuaternion(tiltQuaternion.clone().invert())
             .normalize()
     ), [sunOrbitActive, sunOrbitProgress, tiltQuaternion])
+    const textureRotationOffset = sunOrbitActive ? sunOrbitProgress * Math.PI * 2 : 0
     const spinSunDirection = useMemo(() => getSunDirectionFromEarth(rotationProgress), [rotationProgress])
 
     useEffect(() => {
@@ -743,7 +744,7 @@ function EarthBody({
         <group ref={bodyRef} position={initialPosition.current}>
             <group ref={scaleRef} quaternion={tiltQuaternion} scale={initialScale.current}>
                 <group ref={spinRef}>
-                    <EarthTexture isDark={isDark} theme={theme} />
+                    <EarthTexture isDark={isDark} theme={theme} rotationOffset={textureRotationOffset} />
                     {mode === 'globe' && homeCoords && <LocalRotationPath coords={homeCoords} isDark={isDark} theme={theme} />}
                     {mode === 'globe' && <GlobePoleDecor isDark={isDark} theme={theme} />}
                 </group>
@@ -1636,14 +1637,13 @@ function GlobeSeasonHalo({
     northDirection: THREE.Vector3
 }) {
     const [baseNow, setBaseNow] = useState(() => new Date())
+    const [sunOrbitTimeAnchor, setSunOrbitTimeAnchor] = useState<Date | null>(null)
     const now = useMemo(() => new Date(baseNow.getTime() + dateOffsetMs), [baseNow, dateOffsetMs])
     const ringNow = useMemo(() => new Date(baseNow.getTime() + rotationOffsetMs), [baseNow, rotationOffsetMs])
     const displayDateNow = useMemo(() => (
         new Date(baseNow.getTime() + (sunOrbitActive ? sunOrbitProgress * DISPLAY_YEAR_MS : dateOffsetMs))
     ), [baseNow, dateOffsetMs, sunOrbitActive, sunOrbitProgress])
-    const displayTimeNow = useMemo(() => (
-        new Date(baseNow.getTime() + (sunOrbitActive ? -sunOrbitProgress * DAY_MS : rotationOffsetMs))
-    ), [baseNow, rotationOffsetMs, sunOrbitActive, sunOrbitProgress])
+    const displayTimeNow = sunOrbitActive && sunOrbitTimeAnchor ? sunOrbitTimeAnchor : ringNow
     const year = now.getFullYear()
     const progress = getOrbitalProgress(now)
     const ringProgress = getOrbitalProgress(ringNow)
@@ -1696,6 +1696,9 @@ function GlobeSeasonHalo({
         return { u, v }
     }, [northAxis, ringSpinAngle, tiltQuaternion])
     useEffect(() => {
+        setSunOrbitTimeAnchor(sunOrbitActive ? new Date(baseNow.getTime() + rotationOffsetMs) : null)
+    }, [sunOrbitActive])
+    useEffect(() => {
         let interval: ReturnType<typeof setInterval> | undefined
         const timeout = setTimeout(() => {
             setBaseNow(new Date())
@@ -1729,11 +1732,11 @@ function GlobeSeasonHalo({
         return baseHourPoint(hourProgress + sunOrbitProgress, r)
     }, [baseHourPoint, sunOrbitProgress])
     const timezonePoint = useCallback((hourProgress: number, r = hourRadius) => {
-        const angle = hourProgress * Math.PI * 2
+        const angle = (hourProgress + (sunOrbitActive ? sunOrbitProgress : 0)) * Math.PI * 2
         return timezoneCenter.clone()
             .add(timezoneBasis.u.clone().multiplyScalar(Math.cos(angle) * r))
             .add(timezoneBasis.v.clone().multiplyScalar(Math.sin(angle) * r))
-    }, [hourRadius, timezoneBasis, timezoneCenter])
+    }, [hourRadius, sunOrbitActive, sunOrbitProgress, timezoneBasis, timezoneCenter])
     const hourArc = useMemo(() => {
         const pts: THREE.Vector3[] = []
         for (let i = 0; i <= 96; i++) {
@@ -1803,12 +1806,12 @@ function GlobeSeasonHalo({
     const timezoneUtcColor = isDark ? '#fef08a' : '#a16207'
     const timezoneLocalColor = isDark ? '#f0abfc' : '#a21caf'
     const easternHourProgress = (easternTimeParts.hour + easternTimeParts.minute / 60 + easternTimeParts.second / 3600) / 24
-    const easternHourMarkerPoint = baseHourPoint(easternHourProgress, hourRadius)
-    const easternHourLabelPoint = baseHourPoint(easternHourProgress, hourRadius + 0.09)
+    const easternHourMarkerPoint = hourPoint(easternHourProgress, hourRadius)
+    const easternHourLabelPoint = hourPoint(easternHourProgress, hourRadius + 0.09)
     const easternHourMotionArrow = useMemo(() => {
         const start = easternHourMarkerPoint.clone()
-        const direction = baseHourPoint(easternHourProgress + 0.018, hourRadius)
-            .sub(baseHourPoint(easternHourProgress - 0.018, hourRadius))
+        const direction = hourPoint(easternHourProgress + 0.018, hourRadius)
+            .sub(hourPoint(easternHourProgress - 0.018, hourRadius))
             .normalize()
         const tip = start.clone().add(direction.clone().multiplyScalar(0.074))
         const coneHeight = 0.028
@@ -1819,7 +1822,7 @@ function GlobeSeasonHalo({
             coneHeight,
             coneQuaternion: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction),
         }
-    }, [baseHourPoint, easternHourMarkerPoint, easternHourProgress, hourRadius])
+    }, [easternHourMarkerPoint, easternHourProgress, hourPoint, hourRadius])
 
     return (
         <group>

@@ -52,8 +52,8 @@ function getBrowserTimezone() {
   }
 }
 
-function formatEventBrowserYear(yearGa: string) {
-  return yearGa.replace(' Ga', ' Billion Years')
+function formatEventBrowserYear(yearMa: string) {
+  return yearMa.replace(' Ma', ' Million Years')
 }
 
 export default function App() {
@@ -316,7 +316,7 @@ export default function App() {
             <div className="earth-event-detail" style={{ '--event-color': selectedGalaxyEvent.color } as React.CSSProperties}>
               <div className="earth-event-color" aria-hidden="true" />
               <h2>{selectedGalaxyEvent.label}</h2>
-              <p className="earth-event-year">{formatEventBrowserYear(selectedGalaxyEvent.yearGa)}</p>
+              <p className="earth-event-year">{formatEventBrowserYear(selectedGalaxyEvent.yearMa)}</p>
               <p className="earth-event-description">{selectedGalaxyEvent.description}</p>
             </div>
           </aside>

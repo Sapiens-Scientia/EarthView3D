@@ -18,7 +18,7 @@ export interface GalaxyTimelineEvent {
     label: string
     earthAgeMa: number
     ageMa: number
-    yearGa: string
+    yearMa: string
     description: string
     color: string
     group: string
@@ -198,8 +198,8 @@ function formatSolarYearCount(years: number): string {
 }
 
 function formatEarthAge(earthAgeMa: number): string {
-    if (Math.abs(earthAgeMa) < 0.0005) return '0 Ga'
-    return `${(earthAgeMa / 1000).toPrecision(3)} Ga`
+    if (Math.abs(earthAgeMa) < 0.0005) return '0 Ma'
+    return `${Number(earthAgeMa.toPrecision(3))} Ma`
 }
 
 function ageMaToEarthAge(ageMa: number): number {
@@ -214,7 +214,7 @@ export const GALAXY_TIMELINE_EVENTS: GalaxyTimelineEvent[] = [
             label: item.label,
             earthAgeMa,
             ageMa: item.ageMa,
-            yearGa: formatEarthAge(earthAgeMa),
+            yearMa: formatEarthAge(earthAgeMa),
             description: item.summary,
             color: item.color,
             group: item.level,
@@ -225,7 +225,7 @@ export const GALAXY_TIMELINE_EVENTS: GalaxyTimelineEvent[] = [
         label: 'Solar System now',
         earthAgeMa: EARTH_AGE_MA,
         ageMa: 0,
-        yearGa: formatEarthAge(EARTH_AGE_MA),
+        yearMa: formatEarthAge(EARTH_AGE_MA),
         description: 'Present orbital position',
         color: '#fde68a',
         group: 'present',
@@ -238,7 +238,7 @@ export const GALAXY_TIMELINE_EVENTS: GalaxyTimelineEvent[] = [
             label: item.label,
             earthAgeMa,
             ageMa,
-            yearGa: formatEarthAge(earthAgeMa),
+            yearMa: formatEarthAge(earthAgeMa),
             description: item.summary,
             color: item.color,
             group: 'future',
@@ -1363,7 +1363,7 @@ function GalaxyHistoryModel({ isDark, theme, selectedEventKey }: { isDark: boole
                 outlineWidth={0.005}
                 outlineColor={outline}
             >
-                {`${formatSolarYearCount(GALACTIC_YEAR_SOLAR_YEARS)} years\nper helix turn`}
+                {`${Number(GALACTIC_YEAR_MA.toPrecision(3))} Ma\nper helix turn`}
             </Text>
             {GEO_SCALE_LABELS.map((item) => {
                 const tick = eventTick(item.level)
@@ -1613,7 +1613,7 @@ function GalaxyTimeAxis({
                 outlineWidth={0.004}
                 outlineColor={outline}
             >
-                {`Age of Earth\nin Billions of Years (Ga)`}
+                {`Age of Earth\nin Millions of Years (Ma)`}
             </Text>
         </group>
     )

@@ -46,6 +46,7 @@ const GALAXY_TEXTURE_ZOOM = 0.68
 const GALAXY_EARTH_ORBIT_DECORATIVE_TURNS = 2080
 const GALAXY_EARTH_ORBIT_DECORATIVE_POINTS = 41600
 const GALAXY_EARTH_ORBIT_DECORATIVE_RADIUS = 0.0725
+const GALAXY_TURN_ANNOTATION_EARTH_AGE_MA = 3000
 const FUTURE_PROJECTION_MA = 2_000
 const ECLIPTIC_TO_GALACTIC_RAD = (60.2 * Math.PI) / 180
 const GALAXY_LABEL_RADIAL_SPREAD = 1.18
@@ -1294,6 +1295,19 @@ function GalaxyHistoryModel({ isDark, theme, selectedEventKey }: { isDark: boole
         }
         return rings
     }, [])
+    const helixTurnAnnotation = useMemo(() => {
+        const startEarthAgeMa = GALAXY_TURN_ANNOTATION_EARTH_AGE_MA - GALACTIC_YEAR_MA / 2
+        const endEarthAgeMa = GALAXY_TURN_ANNOTATION_EARTH_AGE_MA + GALACTIC_YEAR_MA / 2
+        const x = -3.15
+        const startY = galaxyPoint(EARTH_AGE_MA - startEarthAgeMa).y
+        const endY = galaxyPoint(EARTH_AGE_MA - endEarthAgeMa).y
+        return {
+            guide: [new THREE.Vector3(x, startY, 0), new THREE.Vector3(x, endY, 0)],
+            startTick: [new THREE.Vector3(x - 0.18, startY, 0), new THREE.Vector3(x + 0.18, startY, 0)],
+            endTick: [new THREE.Vector3(x - 0.18, endY, 0), new THREE.Vector3(x + 0.18, endY, 0)],
+            label: new THREE.Vector3(x + 0.3, (startY + endY) / 2, 0),
+        }
+    }, [])
     const labelFont = (level: typeof GEO_SCALE_LABELS[number]['level']) => {
         if (level === 'eon') return 0.16
         if (level === 'era') return 0.105
@@ -1336,6 +1350,21 @@ function GalaxyHistoryModel({ isDark, theme, selectedEventKey }: { isDark: boole
             <Line points={decorativeEarthOrbit} color={isDark ? '#94a3b8' : '#64748b'} lineWidth={1.1} transparent opacity={0.3} />
             <Line points={pathData.points} vertexColors={pathData.colors} lineWidth={3.3} />
             <Line points={futurePath} color={isDark ? '#fbbf24' : '#d97706'} lineWidth={2.1} transparent opacity={0.5} dashed dashSize={0.14} dashScale={4} gapSize={0.08} />
+            <Line points={helixTurnAnnotation.guide} color={isDark ? '#bae6fd' : '#0891b2'} lineWidth={1.5} transparent opacity={0.82} />
+            <Line points={helixTurnAnnotation.startTick} color={isDark ? '#bae6fd' : '#0891b2'} lineWidth={1.5} transparent opacity={0.82} />
+            <Line points={helixTurnAnnotation.endTick} color={isDark ? '#bae6fd' : '#0891b2'} lineWidth={1.5} transparent opacity={0.82} />
+            <Text
+                position={helixTurnAnnotation.label}
+                fontSize={0.08}
+                color={isDark ? '#e0f2fe' : '#155e75'}
+                anchorX="left"
+                anchorY="middle"
+                lineHeight={0.88}
+                outlineWidth={0.005}
+                outlineColor={outline}
+            >
+                {`${formatSolarYearCount(GALACTIC_YEAR_SOLAR_YEARS)} years\nper helix turn`}
+            </Text>
             {GEO_SCALE_LABELS.map((item) => {
                 const tick = eventTick(item.level)
                 const eventKey = makeGeoEventKey(item.level, item.label)

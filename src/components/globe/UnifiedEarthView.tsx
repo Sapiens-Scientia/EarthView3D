@@ -1340,7 +1340,7 @@ function GalaxyHistoryModel({ isDark, theme, selectedEventKey }: { isDark: boole
                 const tick = eventTick(item.level)
                 const eventKey = makeGeoEventKey(item.level, item.label)
                 const isHovered = activeEventKey === eventKey
-                const showConnector = item.level === 'period' || item.level === 'epoch'
+                const showConnector = item.level !== 'eon'
                 return (
                     <group key={`start-tick-${eventKey}`}>
                         {showConnector && (
@@ -1362,7 +1362,7 @@ function GalaxyHistoryModel({ isDark, theme, selectedEventKey }: { isDark: boole
                     </group>
                 )
             })}
-            {GEO_SCALE_LABELS.filter((item) => item.level === 'period' || item.level === 'epoch').map((item) => {
+            {GEO_SCALE_LABELS.filter((item) => item.level !== 'eon').map((item) => {
                 const eventKey = makeGeoEventKey(item.level, item.label)
                 const isHovered = activeEventKey === eventKey
                 return (
@@ -1470,20 +1470,15 @@ function GalaxyTimeAxis({
     const minorTickLength = 0.1
     const majorAxisLineWidth = 3.0
     const minorAxisLineWidth = 3.0
-    const solarSystemNowKey = SOLAR_SYSTEM_NOW_EVENT_KEY
-    const solarSystemNowColor = isDark ? '#fde68a' : '#a16207'
-    const solarSystemNowY = galaxyPoint(0).y
-    const solarSystemNowLabelY = solarSystemNowY + 0.24
     const activeEventKey = hoveredEventKey ?? selectedEventKey ?? null
-    const isSolarSystemNowHovered = activeEventKey === solarSystemNowKey
-    const eonEraMarkers = useMemo(
+    const eonMarkers = useMemo(
         () => GEO_SCALE_LABELS
-            .filter((item) => item.level === 'eon' || item.level === 'era')
+            .filter((item) => item.level === 'eon')
             .map((item) => ({
                 ...item,
                 eventKey: makeGeoEventKey(item.level, item.label),
                 y: galaxyPoint(item.ageMa).y,
-                labelY: galaxyPoint(item.ageMa).y + (item.level === 'era' && GEO_SCALE_LABELS.some((other) => other.level === 'eon' && other.ageMa === item.ageMa) ? 0.24 : 0),
+                labelY: galaxyPoint(item.ageMa).y,
                 earthAge: ageMaToEarthAge(item.ageMa),
             })),
         [],
@@ -1537,23 +1532,14 @@ function GalaxyTimeAxis({
                     </group>
                 )
             })}
-            {eonEraMarkers.map((item) => {
+            {eonMarkers.map((item) => {
                 const isHovered = activeEventKey === item.eventKey
-                const isEon = item.level === 'eon'
-                const markLength = isEon ? 0.62 : 0.48
-                const markWidth = isHovered ? (isEon ? 4.7 : 3.6) : (isEon ? 3.2 : 2.4)
-                const markerRadius = isHovered ? (isEon ? 0.045 : 0.034) : (isEon ? 0.032 : 0.023)
-                const markerZ = isEon ? z + 0.025 : z + 0.05
+                const markLength = 0.62
+                const markWidth = isHovered ? 4.7 : 3.2
+                const markerRadius = isHovered ? 0.045 : 0.032
+                const markerZ = z + 0.025
                 const labelX = x + 0.9
-                const markerEndY = isEon ? item.y : item.labelY
-                const hasKink = !isEon && Math.abs(item.labelY - item.y) > 0.001
-                const markerPoints = hasKink
-                    ? [
-                        new THREE.Vector3(x, item.y, markerZ),
-                        new THREE.Vector3(x + markLength * 0.55, markerEndY, markerZ),
-                        new THREE.Vector3(x + markLength, markerEndY, markerZ),
-                    ]
-                    : [new THREE.Vector3(x, item.y, markerZ), new THREE.Vector3(x + markLength, markerEndY, markerZ)]
+                const markerPoints = [new THREE.Vector3(x, item.y, markerZ), new THREE.Vector3(x + markLength, item.labelY, markerZ)]
                 return (
                     <group key={`axis-${item.eventKey}`}>
                         <Line
@@ -1561,7 +1547,7 @@ function GalaxyTimeAxis({
                             color={item.color}
                             lineWidth={markWidth}
                             transparent
-                            opacity={isHovered ? 1 : isEon ? 0.95 : 0.82}
+                            opacity={isHovered ? 1 : 0.95}
                         />
                         <mesh position={new THREE.Vector3(x, item.y, markerZ)}>
                             <sphereGeometry args={[markerRadius, 16, 16]} />
@@ -1569,12 +1555,12 @@ function GalaxyTimeAxis({
                         </mesh>
                         <group position={new THREE.Vector3(labelX, item.labelY, z)} scale={isHovered ? 1.08 : 1}>
                             <Text
-                                fontSize={isEon ? 0.096 : 0.068}
+                                fontSize={0.096}
                                 color={isHovered ? '#ffffff' : item.color}
                                 anchorX="left"
                                 anchorY="middle"
                                 lineHeight={0.88}
-                                outlineWidth={isHovered ? 0.008 : isEon ? 0.005 : 0.0035}
+                                outlineWidth={isHovered ? 0.008 : 0.005}
                                 outlineColor={isHovered ? item.color : outline}
                                 onPointerOver={(event) => {
                                     event.stopPropagation()
@@ -1588,41 +1574,6 @@ function GalaxyTimeAxis({
                     </group>
                 )
             })}
-            <group>
-                <Line
-                    points={[
-                        new THREE.Vector3(x, solarSystemNowY, z + 0.075),
-                        new THREE.Vector3(x + 0.4, solarSystemNowLabelY, z + 0.075),
-                        new THREE.Vector3(x + 0.72, solarSystemNowLabelY, z + 0.075),
-                    ]}
-                    color={solarSystemNowColor}
-                    lineWidth={isSolarSystemNowHovered ? 4.4 : 3.0}
-                    transparent
-                    opacity={isSolarSystemNowHovered ? 1 : 0.96}
-                />
-                <mesh position={new THREE.Vector3(x, solarSystemNowY, z + 0.075)}>
-                    <sphereGeometry args={[isSolarSystemNowHovered ? 0.046 : 0.033, 16, 16]} />
-                    <meshBasicMaterial color={solarSystemNowColor} transparent opacity={isSolarSystemNowHovered ? 1 : 0.96} />
-                </mesh>
-                <group position={new THREE.Vector3(x + 0.9, solarSystemNowLabelY, z)} scale={isSolarSystemNowHovered ? 1.08 : 1}>
-                    <Text
-                        fontSize={0.092}
-                        color={isSolarSystemNowHovered ? '#ffffff' : solarSystemNowColor}
-                        anchorX="left"
-                        anchorY="middle"
-                        lineHeight={0.88}
-                        outlineWidth={isSolarSystemNowHovered ? 0.008 : 0.005}
-                        outlineColor={isSolarSystemNowHovered ? solarSystemNowColor : outline}
-                        onPointerOver={(event) => {
-                            event.stopPropagation()
-                            setHoveredEventKey(solarSystemNowKey)
-                        }}
-                        onPointerOut={() => setHoveredEventKey(null)}
-                    >
-                        {`Solar System now\n${formatEarthAge(EARTH_AGE_MA)}`}
-                    </Text>
-                </group>
-            </group>
             <Text
                 position={new THREE.Vector3(x - 0.18, axisEndY + 0.32, z)}
                 fontSize={0.12}

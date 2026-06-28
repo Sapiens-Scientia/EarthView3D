@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Axis3d, Globe2, Layers2, Moon, Orbit, RotateCcw, Sparkles, Sun, Waves } from 'lucide-react'
-import { UnifiedEarthView, type EarthVisualizationMode } from './components/globe/UnifiedEarthView'
+import { Axis3d, ChevronLeft, ChevronRight, Globe2, Layers2, Moon, Orbit, RotateCcw, Sparkles, Sun, Waves } from 'lucide-react'
+import { GALAXY_TIMELINE_EVENTS, UnifiedEarthView, type EarthVisualizationMode } from './components/globe/UnifiedEarthView'
 import { useAppContext } from './contexts'
 
 const MODE_KEY = 'earth-view-mode'
@@ -63,6 +63,9 @@ export default function App() {
   const [orbitTiltView, setOrbitTiltView] = useState(false)
   const [orbitTiltStripsVisible, setOrbitTiltStripsVisible] = useState(true)
   const [resetViewKey, setResetViewKey] = useState(0)
+  const [selectedGalaxyEventKey, setSelectedGalaxyEventKey] = useState(() => {
+    return GALAXY_TIMELINE_EVENTS.find((event) => event.group === 'present')?.key ?? GALAXY_TIMELINE_EVENTS[0]?.key ?? ''
+  })
   const timezone = useMemo(getBrowserTimezone, [])
 
   useEffect(() => {
@@ -131,6 +134,14 @@ export default function App() {
 
   const activeMode = MODES.find((item) => item.id === mode) ?? MODES[3]
   const effectiveSceneIsDark = mode === 'galaxy' || sceneIsDark
+  const displayedGalaxyEvents = useMemo(() => [...GALAXY_TIMELINE_EVENTS].reverse(), [])
+  const selectedGalaxyEventIndex = GALAXY_TIMELINE_EVENTS.findIndex((event) => event.key === selectedGalaxyEventKey)
+  const selectedGalaxyEvent = GALAXY_TIMELINE_EVENTS[selectedGalaxyEventIndex] ?? GALAXY_TIMELINE_EVENTS[0]
+  const displayedGalaxyEventIndex = displayedGalaxyEvents.findIndex((event) => event.key === selectedGalaxyEventKey)
+  const selectGalaxyEventAt = (nextIndex: number) => {
+    const boundedIndex = (nextIndex + GALAXY_TIMELINE_EVENTS.length) % GALAXY_TIMELINE_EVENTS.length
+    setSelectedGalaxyEventKey(GALAXY_TIMELINE_EVENTS[boundedIndex].key)
+  }
 
   return (
     <main className="earth-shell">
@@ -146,6 +157,7 @@ export default function App() {
           orbitTiltView={orbitTiltView}
           orbitTiltStripsVisible={orbitTiltStripsVisible}
           resetViewKey={resetViewKey}
+          selectedGalaxyEventKey={mode === 'galaxy' ? selectedGalaxyEventKey : null}
           timezone={timezone}
           timezoneRingScale={0.72}
         />
@@ -266,6 +278,45 @@ export default function App() {
             </button>
           ))}
         </nav>
+
+        {mode === 'galaxy' && selectedGalaxyEvent && (
+          <aside className="earth-event-browser" aria-label="Earth Event Browser">
+            <div className="earth-event-browser-header">
+              <span>Earth Event Browser</span>
+              <strong>{displayedGalaxyEventIndex + 1} / {displayedGalaxyEvents.length}</strong>
+            </div>
+
+            <label className="earth-event-select-label" htmlFor="earth-event-select">Timeline event</label>
+            <select
+              id="earth-event-select"
+              className="earth-event-select"
+              value={selectedGalaxyEvent.key}
+              onChange={(event) => setSelectedGalaxyEventKey(event.target.value)}
+            >
+              {displayedGalaxyEvents.map((event) => (
+                <option key={event.key} value={event.key}>
+                  {event.label}
+                </option>
+              ))}
+            </select>
+
+            <div className="earth-event-stepper" aria-label="Browse timeline events">
+              <button type="button" onClick={() => selectGalaxyEventAt(selectedGalaxyEventIndex - 1)} aria-label="Previous timeline event" title="Previous event">
+                <ChevronLeft aria-hidden="true" />
+              </button>
+              <button type="button" onClick={() => selectGalaxyEventAt(selectedGalaxyEventIndex + 1)} aria-label="Next timeline event" title="Next event">
+                <ChevronRight aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="earth-event-detail" style={{ '--event-color': selectedGalaxyEvent.color } as React.CSSProperties}>
+              <div className="earth-event-color" aria-hidden="true" />
+              <h2>{selectedGalaxyEvent.label}</h2>
+              <p className="earth-event-year">{selectedGalaxyEvent.yearGa}</p>
+              <p className="earth-event-description">{selectedGalaxyEvent.description}</p>
+            </div>
+          </aside>
+        )}
 
       </section>
     </main>

@@ -13,6 +13,17 @@ interface EarthCoords {
     lng: number
 }
 
+export interface GalaxyTimelineEvent {
+    key: string
+    label: string
+    earthAgeMa: number
+    ageMa: number
+    yearGa: string
+    description: string
+    color: string
+    group: string
+}
+
 const AXIAL_TILT_DEG = 23.44
 const AXIAL_TILT_RAD = (AXIAL_TILT_DEG * Math.PI) / 180
 const ECLIPTIC_NORTH = new THREE.Vector3(0, 1, 0)
@@ -38,6 +49,7 @@ const GALAXY_EARTH_ORBIT_DECORATIVE_RADIUS = 0.0725
 const FUTURE_PROJECTION_MA = 2_000
 const ECLIPTIC_TO_GALACTIC_RAD = (60.2 * Math.PI) / 180
 const GALAXY_LABEL_RADIAL_SPREAD = 1.18
+const SOLAR_SYSTEM_NOW_EVENT_KEY = 'solar-system-now'
 
 const SEASON_EVENTS = [
     { key: 'VE', label: 'Mar Equinox', monthIndex: 2, day: 20, color: '#22c55e' },
@@ -97,6 +109,14 @@ const FUTURE_EARTH_EVENTS = [
     { label: 'Complex surface life stressed', yearsFromNowMa: 1500, color: '#fbbf24', summary: 'Solar brightening greenhouse risk' },
     { label: 'Surface habitability fades', yearsFromNowMa: 2000, color: '#fb923c', summary: 'Oceans likely begin evaporating' },
 ] as const
+
+function makeGeoEventKey(level: string, label: string) {
+    return `${level}-${label}`
+}
+
+function makeFutureEventKey(label: string) {
+    return `future-${label}`
+}
 
 function getOrbitalProgress(date: Date): number {
     const year = date.getFullYear()
@@ -184,6 +204,46 @@ function formatEarthAge(earthAgeMa: number): string {
 function ageMaToEarthAge(ageMa: number): number {
     return EARTH_AGE_MA - ageMa
 }
+
+export const GALAXY_TIMELINE_EVENTS: GalaxyTimelineEvent[] = [
+    ...GEO_SCALE_LABELS.map((item) => {
+        const earthAgeMa = ageMaToEarthAge(item.ageMa)
+        return {
+            key: makeGeoEventKey(item.level, item.label),
+            label: item.label,
+            earthAgeMa,
+            ageMa: item.ageMa,
+            yearGa: formatEarthAge(earthAgeMa),
+            description: item.summary,
+            color: item.color,
+            group: item.level,
+        }
+    }),
+    {
+        key: SOLAR_SYSTEM_NOW_EVENT_KEY,
+        label: 'Solar System now',
+        earthAgeMa: EARTH_AGE_MA,
+        ageMa: 0,
+        yearGa: formatEarthAge(EARTH_AGE_MA),
+        description: 'Present orbital position',
+        color: '#fde68a',
+        group: 'present',
+    },
+    ...FUTURE_EARTH_EVENTS.map((item) => {
+        const earthAgeMa = EARTH_AGE_MA + item.yearsFromNowMa
+        const ageMa = -item.yearsFromNowMa
+        return {
+            key: makeFutureEventKey(item.label),
+            label: item.label,
+            earthAgeMa,
+            ageMa,
+            yearGa: formatEarthAge(earthAgeMa),
+            description: item.summary,
+            color: item.color,
+            group: 'future',
+        }
+    }),
+].sort((a, b) => a.earthAgeMa - b.earthAgeMa)
 
 function getMonthMidpointProgress(year: number, monthIndex: number): number {
     const monthStart = new Date(year, monthIndex, 1).getTime()
@@ -1180,9 +1240,10 @@ function SolarSystemGlyph({
     )
 }
 
-function GalaxyHistoryModel({ isDark, theme }: { isDark: boolean; theme: ThemeMode }) {
+function GalaxyHistoryModel({ isDark, theme, selectedEventKey }: { isDark: boolean; theme: ThemeMode; selectedEventKey?: string | null }) {
     const outline = isDark ? '#020617' : '#ffffff'
     const [hoveredEventKey, setHoveredEventKey] = useState<string | null>(null)
+    const activeEventKey = hoveredEventKey ?? selectedEventKey ?? null
     const decorativeEarthOrbit = useMemo(() => {
         const points: THREE.Vector3[] = []
         for (let i = 0; i <= GALAXY_EARTH_ORBIT_DECORATIVE_POINTS; i++) {
@@ -1277,8 +1338,8 @@ function GalaxyHistoryModel({ isDark, theme }: { isDark: boolean; theme: ThemeMo
             <Line points={futurePath} color={isDark ? '#fbbf24' : '#d97706'} lineWidth={2.1} transparent opacity={0.5} dashed dashSize={0.14} dashScale={4} gapSize={0.08} />
             {GEO_SCALE_LABELS.map((item) => {
                 const tick = eventTick(item.level)
-                const eventKey = `${item.level}-${item.label}`
-                const isHovered = hoveredEventKey === eventKey
+                const eventKey = makeGeoEventKey(item.level, item.label)
+                const isHovered = activeEventKey === eventKey
                 const showConnector = item.level === 'period' || item.level === 'epoch'
                 return (
                     <group key={`start-tick-${eventKey}`}>
@@ -1302,8 +1363,8 @@ function GalaxyHistoryModel({ isDark, theme }: { isDark: boolean; theme: ThemeMo
                 )
             })}
             {GEO_SCALE_LABELS.filter((item) => item.level === 'period' || item.level === 'epoch').map((item) => {
-                const eventKey = `${item.level}-${item.label}`
-                const isHovered = hoveredEventKey === eventKey
+                const eventKey = makeGeoEventKey(item.level, item.label)
+                const isHovered = activeEventKey === eventKey
                 return (
                     <Billboard
                         key={eventKey}
@@ -1332,8 +1393,8 @@ function GalaxyHistoryModel({ isDark, theme }: { isDark: boolean; theme: ThemeMo
             {FUTURE_EARTH_EVENTS.map((item) => {
                 const ageMa = -item.yearsFromNowMa
                 const point = galaxyPoint(ageMa)
-                const eventKey = `future-${item.label}`
-                const isHovered = hoveredEventKey === eventKey
+                const eventKey = makeFutureEventKey(item.label)
+                const isHovered = activeEventKey === eventKey
                 return (
                     <group key={eventKey}>
                         <Line
@@ -1372,12 +1433,12 @@ function GalaxyHistoryModel({ isDark, theme }: { isDark: boolean; theme: ThemeMo
                 )
             })}
             <SolarSystemGlyph position={presentPoint} centerDirection={presentCenterDirection} motionDirection={presentMotionDirection} isDark={isDark} />
-            <Billboard position={presentPoint.clone().add(new THREE.Vector3(0, 0.32, 0))}>
-                <Text fontSize={0.12} color={isDark ? '#fde68a' : '#a16207'} anchorX="center" anchorY="middle" outlineWidth={0.005} outlineColor={outline}>
+            <Billboard position={presentPoint.clone().add(new THREE.Vector3(0, 0.32, 0))} scale={activeEventKey === SOLAR_SYSTEM_NOW_EVENT_KEY ? 1.14 : 1}>
+                <Text fontSize={0.12} color={activeEventKey === SOLAR_SYSTEM_NOW_EVENT_KEY ? '#ffffff' : isDark ? '#fde68a' : '#a16207'} anchorX="center" anchorY="middle" outlineWidth={activeEventKey === SOLAR_SYSTEM_NOW_EVENT_KEY ? 0.009 : 0.005} outlineColor={activeEventKey === SOLAR_SYSTEM_NOW_EVENT_KEY ? '#fde68a' : outline}>
                     {`Solar System now\n${formatEarthAge(EARTH_AGE_MA)}`}
                 </Text>
             </Billboard>
-            <GalaxyTimeAxis isDark={isDark} theme={theme} hoveredEventKey={hoveredEventKey} setHoveredEventKey={setHoveredEventKey} />
+            <GalaxyTimeAxis isDark={isDark} theme={theme} hoveredEventKey={hoveredEventKey} selectedEventKey={selectedEventKey} setHoveredEventKey={setHoveredEventKey} />
         </group>
     )
 }
@@ -1386,11 +1447,13 @@ function GalaxyTimeAxis({
     isDark,
     theme,
     hoveredEventKey,
+    selectedEventKey,
     setHoveredEventKey,
 }: {
     isDark: boolean
     theme: ThemeMode
     hoveredEventKey: string | null
+    selectedEventKey?: string | null
     setHoveredEventKey: React.Dispatch<React.SetStateAction<string | null>>
 }) {
     const axisColor = '#ffffff'
@@ -1407,17 +1470,18 @@ function GalaxyTimeAxis({
     const minorTickLength = 0.1
     const majorAxisLineWidth = 3.0
     const minorAxisLineWidth = 3.0
-    const solarSystemNowKey = 'axis-solar-system-now'
+    const solarSystemNowKey = SOLAR_SYSTEM_NOW_EVENT_KEY
     const solarSystemNowColor = isDark ? '#fde68a' : '#a16207'
     const solarSystemNowY = galaxyPoint(0).y
     const solarSystemNowLabelY = solarSystemNowY + 0.24
-    const isSolarSystemNowHovered = hoveredEventKey === solarSystemNowKey
+    const activeEventKey = hoveredEventKey ?? selectedEventKey ?? null
+    const isSolarSystemNowHovered = activeEventKey === solarSystemNowKey
     const eonEraMarkers = useMemo(
         () => GEO_SCALE_LABELS
             .filter((item) => item.level === 'eon' || item.level === 'era')
             .map((item) => ({
                 ...item,
-                eventKey: `${item.level}-${item.label}`,
+                eventKey: makeGeoEventKey(item.level, item.label),
                 y: galaxyPoint(item.ageMa).y,
                 labelY: galaxyPoint(item.ageMa).y + (item.level === 'era' && GEO_SCALE_LABELS.some((other) => other.level === 'eon' && other.ageMa === item.ageMa) ? 0.24 : 0),
                 earthAge: ageMaToEarthAge(item.ageMa),
@@ -1474,7 +1538,7 @@ function GalaxyTimeAxis({
                 )
             })}
             {eonEraMarkers.map((item) => {
-                const isHovered = hoveredEventKey === item.eventKey
+                const isHovered = activeEventKey === item.eventKey
                 const isEon = item.level === 'eon'
                 const markLength = isEon ? 0.62 : 0.48
                 const markWidth = isHovered ? (isEon ? 4.7 : 3.6) : (isEon ? 3.2 : 2.4)
@@ -2016,6 +2080,7 @@ function UnifiedScene({
     orbitTiltView,
     orbitTiltStripsVisible,
     resetViewKey,
+    selectedGalaxyEventKey,
 }: {
     mode: EarthVisualizationMode
     isDark: boolean
@@ -2030,6 +2095,7 @@ function UnifiedScene({
     orbitTiltView: boolean
     orbitTiltStripsVisible: boolean
     resetViewKey: number
+    selectedGalaxyEventKey?: string | null
 }) {
     const { camera } = useThree()
     const sceneDate = useMemo(() => new Date(Date.now() + dateOffsetMs), [dateOffsetMs])
@@ -2112,7 +2178,7 @@ function UnifiedScene({
                 {mode === 'orbit' && orbitTiltStripsVisible && <OrbitTiltReferenceRings isDark={isDark} theme={theme} />}
                 {mode === 'orbit' && <OrbitAnnotations isDark={isDark} theme={theme} progress={progress} />}
                 {mode === 'spiral' && <SpiralAnnotations isDark={isDark} theme={theme} />}
-                {mode === 'galaxy' && <GalaxyHistoryModel isDark={isDark} theme={theme} />}
+                {mode === 'galaxy' && <GalaxyHistoryModel isDark={isDark} theme={theme} selectedEventKey={selectedGalaxyEventKey} />}
                 {mode !== 'globe' && mode !== 'galaxy' && <Sun position={sunPos} radius={sunRadius} isDark={isDark} theme={theme} />}
                 {(mode === 'orbit' || mode === 'spiral') && (
                     <Billboard position={sunPos.clone().add(new THREE.Vector3(0, sunRadius + 0.38, 0))}>
@@ -2186,12 +2252,13 @@ interface UnifiedEarthViewProps {
     orbitTiltView?: boolean
     orbitTiltStripsVisible?: boolean
     resetViewKey?: number
+    selectedGalaxyEventKey?: string | null
     homeCoords?: EarthCoords
     timezone: string
     timezoneRingScale?: number
 }
 
-export function UnifiedEarthView({ className, style, mode, dateOffsetMs = 0, rotationOffsetMs = 0, sunOrbitProgress = 0, sunOrbitActive = false, isDarkOverride, orbitTiltView = false, orbitTiltStripsVisible = true, resetViewKey = 0, homeCoords, timezone, timezoneRingScale = 1 }: UnifiedEarthViewProps) {
+export function UnifiedEarthView({ className, style, mode, dateOffsetMs = 0, rotationOffsetMs = 0, sunOrbitProgress = 0, sunOrbitActive = false, isDarkOverride, orbitTiltView = false, orbitTiltStripsVisible = true, resetViewKey = 0, selectedGalaxyEventKey, homeCoords, timezone, timezoneRingScale = 1 }: UnifiedEarthViewProps) {
     const { isDark, theme } = useAppContext()
     const [ready, setReady] = useState(false)
     const [contextResetKey, setContextResetKey] = useState(0)
@@ -2228,7 +2295,7 @@ export function UnifiedEarthView({ className, style, mode, dateOffsetMs = 0, rot
                 }}
             >
                 <SceneBackground color={bgColor} />
-                <UnifiedScene mode={mode} isDark={sceneIsDark} theme={theme} dateOffsetMs={dateOffsetMs} rotationOffsetMs={rotationOffsetMs} sunOrbitProgress={sunOrbitProgress} sunOrbitActive={sunOrbitActive} homeCoords={homeCoords} timezone={timezone} timezoneRingScale={timezoneRingScale} orbitTiltView={orbitTiltView} orbitTiltStripsVisible={orbitTiltStripsVisible} resetViewKey={resetViewKey} />
+                <UnifiedScene mode={mode} isDark={sceneIsDark} theme={theme} dateOffsetMs={dateOffsetMs} rotationOffsetMs={rotationOffsetMs} sunOrbitProgress={sunOrbitProgress} sunOrbitActive={sunOrbitActive} homeCoords={homeCoords} timezone={timezone} timezoneRingScale={timezoneRingScale} orbitTiltView={orbitTiltView} orbitTiltStripsVisible={orbitTiltStripsVisible} resetViewKey={resetViewKey} selectedGalaxyEventKey={selectedGalaxyEventKey} />
             </Canvas>
         </div>
     )

@@ -177,8 +177,8 @@ function formatSolarYearCount(years: number): string {
 }
 
 function formatEarthAge(earthAgeMa: number): string {
-    if (Math.abs(earthAgeMa) < 0.0005) return '0 Ma EA'
-    return `${Number(earthAgeMa.toPrecision(3))} Ma EA`
+    if (Math.abs(earthAgeMa) < 0.0005) return '0 Ga'
+    return `${(earthAgeMa / 1000).toPrecision(3)} Ga`
 }
 
 function ageMaToEarthAge(ageMa: number): number {
@@ -1569,7 +1569,7 @@ function GalaxyTimeAxis({
                 outlineWidth={0.004}
                 outlineColor={outline}
             >
-                {`Earth Age\n(Years since formation of Earth)`}
+                {`Age of Earth\nin Billions of Years (Ga)`}
             </Text>
         </group>
     )

@@ -53,7 +53,7 @@ function getBrowserTimezone() {
 }
 
 function formatEventBrowserYear(yearMa: string) {
-  return yearMa.replace(' Ma', ' Million Years')
+  return yearMa.replace(' Ma', ' Million Years Old')
 }
 
 export default function App() {
@@ -318,6 +318,29 @@ export default function App() {
               <h2>{selectedGalaxyEvent.label}</h2>
               <p className="earth-event-year">{formatEventBrowserYear(selectedGalaxyEvent.yearMa)}</p>
               <p className="earth-event-description">{selectedGalaxyEvent.description}</p>
+            </div>
+
+            <div className="earth-gts-glossary" aria-label="Geologic time scale nomenclature">
+              <h3>Geologic Time Scale nomenclature</h3>
+              <p>Eon &gt; Era &gt; Period &gt; Epoch</p>
+              <dl>
+                <div>
+                  <dt>Eon</dt>
+                  <dd>Largest named span of geologic time.</dd>
+                </div>
+                <div>
+                  <dt>Era</dt>
+                  <dd>Major subdivision within an eon.</dd>
+                </div>
+                <div>
+                  <dt>Period</dt>
+                  <dd>Subdivision within an era.</dd>
+                </div>
+                <div>
+                  <dt>Epoch</dt>
+                  <dd>Finer subdivision within a period.</dd>
+                </div>
+              </dl>
             </div>
           </aside>
         )}

@@ -222,7 +222,7 @@ export const GALAXY_TIMELINE_EVENTS: GalaxyTimelineEvent[] = [
     }),
     {
         key: SOLAR_SYSTEM_NOW_EVENT_KEY,
-        label: 'Solar System now',
+        label: 'Earth Now',
         earthAgeMa: EARTH_AGE_MA,
         ageMa: 0,
         yearMa: formatEarthAge(EARTH_AGE_MA),
@@ -1464,7 +1464,7 @@ function GalaxyHistoryModel({ isDark, theme, selectedEventKey }: { isDark: boole
             <SolarSystemGlyph position={presentPoint} centerDirection={presentCenterDirection} motionDirection={presentMotionDirection} isDark={isDark} />
             <Billboard position={presentPoint.clone().add(new THREE.Vector3(0, 0.32, 0))} scale={activeEventKey === SOLAR_SYSTEM_NOW_EVENT_KEY ? 1.14 : 1}>
                 <Text fontSize={0.12} color={activeEventKey === SOLAR_SYSTEM_NOW_EVENT_KEY ? '#ffffff' : isDark ? '#fde68a' : '#a16207'} anchorX="center" anchorY="middle" outlineWidth={activeEventKey === SOLAR_SYSTEM_NOW_EVENT_KEY ? 0.009 : 0.005} outlineColor={activeEventKey === SOLAR_SYSTEM_NOW_EVENT_KEY ? '#fde68a' : outline}>
-                    {`Solar System now\n${formatEarthAge(EARTH_AGE_MA)}`}
+                    {`Earth Now\n${formatEarthAge(EARTH_AGE_MA)}`}
                 </Text>
             </Billboard>
             <GalaxyTimeAxis isDark={isDark} theme={theme} hoveredEventKey={hoveredEventKey} selectedEventKey={selectedEventKey} setHoveredEventKey={setHoveredEventKey} />

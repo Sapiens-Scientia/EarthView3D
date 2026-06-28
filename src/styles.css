@@ -381,6 +381,57 @@ button {
   color: rgba(226, 232, 240, 0.76);
 }
 
+.earth-gts-glossary {
+  display: grid;
+  gap: 7px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(226, 232, 240, 0.16);
+}
+
+.earth-gts-glossary h3,
+.earth-gts-glossary p,
+.earth-gts-glossary dl,
+.earth-gts-glossary dd {
+  margin: 0;
+}
+
+.earth-gts-glossary h3 {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.84);
+}
+
+.earth-gts-glossary p {
+  font-size: 12px;
+  font-weight: 800;
+  color: #bae6fd;
+}
+
+.earth-gts-glossary dl {
+  display: grid;
+  gap: 5px;
+}
+
+.earth-gts-glossary dl div {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  gap: 8px;
+}
+
+.earth-gts-glossary dt {
+  font-size: 11px;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.earth-gts-glossary dd {
+  font-size: 11px;
+  line-height: 1.25;
+  color: rgba(226, 232, 240, 0.7);
+}
+
 @media (max-width: 640px) {
   .earth-shell {
     min-height: 420px;
@@ -457,7 +508,11 @@ button {
 
   .earth-event-browser-header strong,
   .earth-event-select,
-  .earth-event-description {
+  .earth-event-description,
+  .earth-gts-glossary h3,
+  .earth-gts-glossary p,
+  .earth-gts-glossary dt,
+  .earth-gts-glossary dd {
     font-size: 11px;
   }
 

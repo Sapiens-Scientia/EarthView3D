@@ -280,7 +280,7 @@ button {
 }
 
 .earth-event-browser-header span {
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 800;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -369,7 +369,7 @@ button {
 
 .earth-event-year {
   margin: 0;
-  font-size: 13px;
+  font-size: 18px;
   font-weight: 800;
   color: #bae6fd;
 }
@@ -455,11 +455,15 @@ button {
     padding: 11px;
   }
 
-  .earth-event-browser-header span,
   .earth-event-browser-header strong,
   .earth-event-select,
   .earth-event-description {
     font-size: 11px;
+  }
+
+  .earth-event-browser-header span,
+  .earth-event-year {
+    font-size: 14px;
   }
 
   .earth-event-detail h2 {
